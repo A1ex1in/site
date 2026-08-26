@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регистрация студента</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <h1>Регистрация студента</h1>
+    <form id="registerForm">
+        <div>
+            <label for="lastName">Фамилия</label>
+            <input
+                id="lastName"
+                type="text"
+                required
+            >
+        </div>
+        <div>
+            <label for="firstName">Имя</label>
+            <input
+                id="firstName"
+                type="text"
+                required
+            >
+        </div>
+        <div>
+            <label for="middleName">Отчество</label>
+            <input
+                id="middleName"
+                type="text"
+            >
+        </div>
+        <div>
+            <label for="email">Email</label>
+            <input
+                id="email"
+                type="email"
+                required
+            >
+        </div>
+        <div>
+            <label for="password">Пароль</label>
+            <input
+                id="password"
+                type="password"
+                required
+            >
+        </div>
+        <div>
+            <label for="passwordRepeat">Повторите пароль</label>
+            <input
+                id="passwordRepeat"
+                type="password"
+                required
+            >
+        </div>
+        <div>
+            <label for="group">Группа</label>
+
+            <select id="group" required>
+                <option value="">
+                    Загрузка групп...
+                </option>
+            </select>
+        </div>
+        <div>
+            <label for="studentNumber">
+                Номер студента
+            </label>
+
+            <input
+                id="studentNumber"
+                type="text"
+            >
+        </div>
+        <button type="submit">
+            Зарегистрироваться
+        </button>
+    </form>
+    <p id="message"></p>
+    <script src="register.js"></script>
+</body>
+</html>

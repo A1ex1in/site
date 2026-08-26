@@ -10,13 +10,18 @@ async function loadUsers() {
     usersList.innerHTML = "";
     for (const user of users) {
         const li = document.createElement("li");
-        li.textContent = `${user.id}: ${user.name} `;
+        const fullName = [
+            user.last_name,
+            user.first_name,
+            user.middle_name
+        ].filter(Boolean).join(" ");
+        li.textContent = `${user.id}: ${fullName} `;
         const editButton = document.createElement("button");
         editButton.textContent = "Изменить";
         editButton.addEventListener("click", async () => {
             const newName = prompt(
                 "Введите новое имя:",
-                user.name
+                fullName
             );
             if (!newName) {
                 return;
@@ -27,7 +32,7 @@ async function loadUsers() {
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    name: newName
+                    first_name: newName
                 })
             });
             loadUsers();
@@ -57,7 +62,7 @@ addButton.addEventListener("click", async () => {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            name: name
+            first_name: name
         })
     });
     nameInput.value = "";
