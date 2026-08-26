@@ -41,8 +41,7 @@ form.addEventListener("submit", async (event) => {
             return;
         }
         if (user.role === "student") {
-            message.textContent =
-                "Вход выполнен. Кабинет студента пока не создан.";
+            window.location.href = "student.html";
             return;
         }
         message.textContent =
