@@ -10,29 +10,6 @@ app.use(cors());
 app.use(express.json());
 
 // GET
-app.get("/api/users", async (request, response) => {
-    try {
-        const result = await pool.query(`
-            SELECT
-                id,
-                email,
-                last_name,
-                first_name,
-                middle_name,
-                role,
-                status
-            FROM users
-            ORDER BY id
-        `);
-        response.json(result.rows);
-    } catch (error) {
-        console.error("Ошибка получения пользователей:", error);
-        response.status(500).json({
-            error: "Ошибка получения пользователей"
-        });
-    }
-});
-
 app.get("/api/groups", async (request, response) => {
     try {
         const result = await pool.query(`
