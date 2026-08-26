@@ -1,0 +1,16 @@
+docker run -d `
+  --name site-postgres `
+  -e POSTGRES_USER=site_user `
+  -e POSTGRES_PASSWORD=site_password `
+  -e POSTGRES_DB=site_db `
+  -p 5432:5432 `
+  -v site-postgres-data:/var/lib/postgresql/data `
+  postgres:17
+
+
+
+npx serve frontend -l 3001
+
+
+node server.js
+
