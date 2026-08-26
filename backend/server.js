@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const pool = require("./db");
 
 const app = express();
 const port = 3000;
@@ -30,6 +31,27 @@ app.get("/api/users/:id", (request, response) => {
         });
     }
     response.json(user);
+});
+
+app.get("/api/db-test", async (request, response) => {
+    try {
+        const result = await pool.query(`
+            SELECT
+                current_database() AS database,
+                current_user AS user_name,
+                NOW() AS server_time
+        `);
+        response.json({
+            status: "ok",
+            database: result.rows[0]
+        });
+    } catch (error) {
+        console.error("Ошибка подключения к PostgreSQL:", error);
+        response.status(500).json({
+            status: "error",
+            message: "Не удалось подключиться к PostgreSQL"
+        });
+    }
 });
 
 // POST
