@@ -246,3 +246,40 @@ SELECT
 FROM result
 
 ORDER BY sort_order;
+
+
+
+
+-- ============================================================
+-- DATABASE CLEAR
+--
+-- Удаляет все данные.
+-- Ничего в базе не изменяет.
+-- ============================================================
+
+BEGIN;
+
+TRUNCATE TABLE
+    courses,
+    student_profiles,
+    disciplines,
+    student_groups,
+    users
+RESTART IDENTITY
+CASCADE;
+
+COMMIT;
+
+
+SELECT COUNT(*) FROM users;
+SELECT COUNT(*) FROM student_groups;
+SELECT COUNT(*) FROM student_profiles;
+SELECT COUNT(*) FROM disciplines;
+SELECT COUNT(*) FROM courses;
+
+
+SELECT * FROM users;
+SELECT * FROM student_groups;
+SELECT * FROM student_profiles;
+SELECT * FROM disciplines;
+SELECT * FROM courses;
