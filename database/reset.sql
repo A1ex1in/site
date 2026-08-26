@@ -1,6 +1,8 @@
 -- ============================================================
 -- DEVELOPMENT DATABASE RESET
 --
+-- НЕ ИСПОЛЬЗОВАТЬ В PRODUCTION
+--
 -- Полностью очищает данные разработки,
 -- но НЕ удаляет структуру БД.
 --
@@ -14,6 +16,7 @@
 BEGIN;
 
 TRUNCATE TABLE
+    user_sessions,
     courses,
     student_profiles,
     disciplines,

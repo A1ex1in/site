@@ -28,8 +28,9 @@ WHERE NOT EXISTS (
 
 -- ------------------------------------------------------------
 -- Тестовый преподаватель
---
--- TEST_PASSWORD_HASH пока является заглушкой.
+-- Email: teacher@example.local
+-- Пароль: Teacher123!
+-- $argon2id$v=19$m=65536,p=4,t=3$WVk4PBQmtFLEua72ZeZQnw$LggQCGP80VmixuJhxunmMg2z1SR0cdG+zmMS9Db1ZCU пока является заглушкой.
 -- Через настоящую авторизацию этим пользователем входить нельзя.
 -- ------------------------------------------------------------
 
@@ -44,7 +45,7 @@ INSERT INTO users (
 )
 SELECT
     'teacher@example.local',
-    'TEST_PASSWORD_HASH',
+    '$argon2id$v=19$m=65536,p=4,t=3$WVk4PBQmtFLEua72ZeZQnw$LggQCGP80VmixuJhxunmMg2z1SR0cdG+zmMS9Db1ZCU',
     'Ирина',
     'Иванова',
     'Ивановна',
@@ -59,6 +60,10 @@ WHERE NOT EXISTS (
 
 -- ------------------------------------------------------------
 -- Тестовый студент
+-- Email: student@example.local
+-- Пароль: Student123!
+-- $argon2id$v=19$m=65536,p=4,t=3$/QqMqePOoo86TtNtKwyWGQ$tgZBZcxzF1YoiowG3aO4cQZf6rmwb6f4Wn9kFhHT1TI
+-- Через настоящую авторизацию этим пользователем входить нельзя.
 -- ------------------------------------------------------------
 
 INSERT INTO users (
@@ -72,7 +77,7 @@ INSERT INTO users (
 )
 SELECT
     'student@example.local',
-    'TEST_PASSWORD_HASH',
+    '$argon2id$v=19$m=65536,p=4,t=3$/QqMqePOoo86TtNtKwyWGQ$tgZBZcxzF1YoiowG3aO4cQZf6rmwb6f4Wn9kFhHT1TI',
     'Иван',
     'Петров',
     'Сергеевич',

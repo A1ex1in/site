@@ -1,15 +1,119 @@
 const express = require("express");
 const cors = require("cors");
-const pool = require("./db");
+const session = require("express-session");
 const argon2 = require("argon2");
+
+const pool = require("./db");
+
+const pgSession = require("connect-pg-simple")(session);
 
 const app = express();
 const port = 3000;
 
-app.use(cors());
+// CORS
+app.use(
+    cors({
+        origin: "http://127.0.0.1:3001",
+        credentials: true
+    })
+);
+
+// JSON body parser
 app.use(express.json());
 
+// Sessions
+app.use(
+    session({
+        store: new pgSession({
+            pool: pool,
+            tableName: "user_sessions"
+        }),
+        name: "site.sid",
+        secret: process.env.SESSION_SECRET,
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+            httpOnly: true,
+            secure: false,
+            sameSite: "lax",
+            maxAge: 1000 * 60 * 60 * 8
+        }
+    })
+);
+
+async function requireAuth(request, response, next) {
+    if (!request.session.user) {
+        return response.status(401).json({
+            error: "Необходима авторизация"
+        });
+    }
+    try {
+        const result = await pool.query(
+            `
+            SELECT
+                id,
+                email,
+                first_name,
+                last_name,
+                middle_name,
+                role,
+                status
+            FROM users
+            WHERE id = $1
+            `,
+            [request.session.user.id]
+        );
+        if (result.rowCount === 0) {
+            request.session.destroy(() => {});
+            return response.status(401).json({
+                error: "Пользователь не найден"
+            });
+        }
+        const user = result.rows[0];
+        if (user.status !== "active") {
+            request.session.destroy(() => {});
+            return response.status(403).json({
+                error: "Учётная запись недоступна"
+            });
+        }
+        request.user = user;
+        next();
+    } catch (error) {
+        console.error(
+            "Ошибка проверки авторизации:",
+            error
+        );
+        response.status(500).json({
+            error: "Ошибка проверки авторизации"
+        });
+    }
+}
+
+function requireTeacher(request, response, next) {
+    if (request.user.role !== "teacher") {
+        return response.status(403).json({
+            error: "Доступ разрешён только преподавателю"
+        });
+    }
+    next();
+}
+
 // GET
+app.get("/api/auth/me", requireAuth, (request, response) => {
+        response.json({
+            user: {
+                id: request.user.id,
+                email: request.user.email,
+                firstName: request.user.first_name,
+                lastName: request.user.last_name,
+                middleName: request.user.middle_name,
+                role: request.user.role,
+                status: request.user.status
+            }
+        });
+    }
+);
+
 app.get("/api/groups", async (request, response) => {
     try {
         const result = await pool.query(`
@@ -30,7 +134,7 @@ app.get("/api/groups", async (request, response) => {
     }
 });
 
-app.get("/api/students/pending", async (request, response) => {
+app.get("/api/students/pending", requireAuth, requireTeacher, async (request, response) => {
     try {
         const result = await pool.query(`
             SELECT
@@ -65,6 +169,24 @@ app.get("/api/students/pending", async (request, response) => {
 });
 
 // POST
+app.post("/api/auth/logout", requireAuth, (request, response) => {
+    request.session.destroy((error) => {
+        if (error) {
+            console.error(
+                "Ошибка завершения сессии:",
+                error
+            );
+            return response.status(500).json({
+                error: "Не удалось выйти из системы"
+            });
+        }
+        response.clearCookie("site.sid");
+        response.json({
+            message: "Выход выполнен"
+        });
+    });
+});
+
 app.post("/api/auth/register", async (request, response) => {
     const client = await pool.connect();
     try {
@@ -182,11 +304,110 @@ app.post("/api/auth/register", async (request, response) => {
     }
 });
 
+app.post("/api/auth/login", async (request, response) => {
+    try {
+        const {
+            email,
+            password
+        } = request.body;
+        if (!email || !password) {
+            return response.status(400).json({
+                error: "Необходимо указать email и пароль"
+            });
+        }
+        const result = await pool.query(
+            `
+            SELECT
+                id,
+                email,
+                password_hash,
+                first_name,
+                last_name,
+                middle_name,
+                role,
+                status
+            FROM users
+            WHERE LOWER(email) = LOWER($1)
+            `,
+            [email.trim()]
+        );
+        if (result.rowCount === 0) {
+            return response.status(401).json({
+                error: "Неверный email или пароль"
+            });
+        }
+        const user = result.rows[0];
+        const passwordIsValid =
+            await argon2.verify(
+                user.password_hash,
+                password
+            );
+        if (!passwordIsValid) {
+            return response.status(401).json({
+                error: "Неверный email или пароль"
+            });
+        }
+        if (user.status !== "active") {
+            if (user.status === "pending") {
+                return response.status(403).json({
+                    error: "Регистрация ещё не подтверждена преподавателем"
+                });
+            }
+            if (user.status === "rejected") {
+                return response.status(403).json({
+                    error: "Регистрация отклонена"
+                });
+            }
+            if (user.status === "blocked") {
+                return response.status(403).json({
+                    error: "Учётная запись заблокирована"
+                });
+            }
+            return response.status(403).json({
+                error: "Доступ к учётной записи запрещён"
+            });
+        }
+        await new Promise((resolve, reject) => {
+            request.session.regenerate((error) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+                resolve();
+            });
+        });
+        request.session.user = {
+            id: user.id,
+            role: user.role
+        };
+        response.json({
+            message: "Вход выполнен",
+            user: {
+                id: user.id,
+                email: user.email,
+                firstName: user.first_name,
+                lastName: user.last_name,
+                middleName: user.middle_name,
+                role: user.role,
+                status: user.status
+            }
+        });
+    } catch (error) {
+        console.error(
+            "Ошибка авторизации:",
+            error
+        );
+        response.status(500).json({
+            error: "Ошибка авторизации"
+        });
+    }
+});
+
 // PUT
 
 
 // PATCH
-app.patch("/api/students/:id/approve", async (request, response) => {
+app.patch("/api/students/:id/approve",requireAuth,requireTeacher,async (request, response) => {
     try {
         const studentId = request.params.id;
         const result = await pool.query(
@@ -230,7 +451,7 @@ app.patch("/api/students/:id/approve", async (request, response) => {
     }
 });
 
-app.patch("/api/students/:id/reject", async (request, response) => {
+app.patch("/api/students/:id/reject",requireAuth,requireTeacher,async (request, response) => {
     try {
         const studentId = request.params.id;
         const result = await pool.query(
