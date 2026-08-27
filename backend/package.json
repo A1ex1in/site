@@ -5,7 +5,10 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev:backend": "node --watch server.js",
+    "dev:frontend": "serve ../frontend -l 3001",
+    "dev": "concurrently -k \"npm:dev:backend\" \"npm:dev:frontend\""
   },
   "keywords": [],
   "author": "",
@@ -19,5 +22,9 @@
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "serve": "^14.2.6"
   }
 }
