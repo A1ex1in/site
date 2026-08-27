@@ -22,6 +22,9 @@ const studentRoutes =
 const studentsRoutes =
     require("./routes/students");
 
+const teacherRoutes =
+    require("./routes/teacher");
+
 
 const app = express();
 
@@ -97,5 +100,9 @@ app.use(
     studentsRoutes
 );
 
+app.use(
+    "/api/teacher",
+    teacherRoutes
+);
 
 module.exports = app;

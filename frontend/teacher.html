@@ -26,6 +26,62 @@
         Загрузка...
     </div>
     <p id="message"></p>
+
+    <hr>
+    <h2>Учебные группы</h2>
+    <form id="groupForm">
+        <div>
+            <label for="groupName">
+                Название группы
+            </label>
+            <input
+                id="groupName"
+                type="text"
+                placeholder="Например, АТ-232"
+                required
+            >
+        </div>
+        <div>
+            <label for="groupDescription">
+                Описание
+            </label>
+            <input
+                id="groupDescription"
+                type="text"
+                placeholder="Учебная группа АТ-232"
+            >
+        </div>
+        <button type="submit">
+            Добавить группу
+        </button>
+    </form>
+    <div id="groupsList">
+        Загрузка групп...
+    </div>
+
+    <section id="groupStudentsSection" hidden>
+        <h3 id="selectedGroupName">
+            Студенты группы
+        </h3>
+        <div id="groupStudentsList"></div>
+    </section>
+
+    <section id="studentDetailsSection" hidden>
+        <hr>
+        <h3>Карточка студента</h3>
+        <div id="studentDetails"></div>
+        <h4>Изменить группу</h4>
+        <form id="changeGroupForm">
+            <select id="studentGroupSelect" required>
+            </select>
+            <button type="submit">
+                Сохранить группу
+            </button>
+        </form>
+    </section>
+    <button id="studentStatusButton" type="button">
+    </button>
+
     <script src="teacher.js"></script>
 </body>
 </html>
