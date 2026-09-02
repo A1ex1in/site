@@ -14,6 +14,11 @@ const studentDetails = document.getElementById("studentDetails");
 const changeGroupForm = document.getElementById("changeGroupForm");
 const studentGroupSelect = document.getElementById("studentGroupSelect");
 const studentStatusButton = document.getElementById("studentStatusButton");
+const disciplineForm = document.getElementById("disciplineForm");
+const disciplineNameInput = document.getElementById("disciplineName");
+const disciplineCodeInput = document.getElementById("disciplineCode");
+const disciplineDescriptionInput = document.getElementById("disciplineDescription");
+const disciplinesList = document.getElementById("disciplinesList");
 
 let selectedStudentId = null;
 let selectedGroupId = null;
@@ -148,6 +153,79 @@ studentStatusButton.addEventListener("click",async () => {
     }
   }
 );
+
+disciplineForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = disciplineNameInput.value.trim();
+    const code = disciplineCodeInput.value.trim();
+    const description = disciplineDescriptionInput.value.trim();
+    if (!name) {
+      message.textContent = "Введите название дисциплины.";
+      return;
+    }
+    try {
+      const response = await fetch(`${apiUrl}/api/teacher/disciplines`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            name,
+            code,
+            description
+          })
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        message.textContent = data.error || "Ошибка создания дисциплины.";
+        return;
+      }
+      message.textContent = data.message;
+      disciplineForm.reset();
+      await loadDisciplines();
+    } catch (error) {
+      console.error("Ошибка создания дисциплины:", error);
+      message.textContent = "Не удалось создать дисциплину.";
+    }
+  }
+);
+
+async function loadDisciplines() {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/disciplines`,
+      {
+        credentials: "include"
+      }
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка получения дисциплин.";
+      return;
+    }
+    disciplinesList.innerHTML = "";
+    if (data.length === 0) {
+      disciplinesList.textContent = "Дисциплины пока не созданы.";
+      return;
+    }
+    for (const discipline of data) {
+      const container = document.createElement("div");
+      const nameElement = document.createElement("strong");
+      nameElement.textContent = discipline.name;
+      const codeElement = document.createElement("span");
+      codeElement.textContent = discipline.code ? ` — ${discipline.code}` : "";
+      const descriptionElement = document.createElement("span");
+      descriptionElement.textContent = discipline.description ? ` — ${discipline.description}` : "";
+      container.appendChild(nameElement);
+      container.appendChild(codeElement);
+      container.appendChild(descriptionElement);
+      disciplinesList.appendChild(container);
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки дисциплин:", error);
+    message.textContent = "Не удалось загрузить список дисциплин.";
+  }
+}
 
 async function checkTeacherAccess() {
   try {
@@ -428,6 +506,7 @@ async function loadGroupsForStudent(currentGroupId) {
   }
 }
 
+
 async function init() {
   const accessAllowed = await checkTeacherAccess();
   if (!accessAllowed) {
@@ -435,7 +514,7 @@ async function init() {
   }
   await loadPendingStudents();
   await loadGroups();
+  await loadDisciplines();
 }
-
 
 init();
