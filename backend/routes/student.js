@@ -1,28 +1,13 @@
 const express = require("express");
-
 const pool = require("../db");
-
-const {
-    requireAuth,
-    requireStudent
-} = require("../middleware/auth");
-
-
+const { requireAuth, requireStudent } = require("../middleware/auth");
 const router = express.Router();
 
 router.get("/profile",requireAuth,requireStudent,async (request, response) => {
         try {
             const result = await pool.query(
                 `
-                SELECT
-                    u.id,
-                    u.email,
-                    u.first_name,
-                    u.last_name,
-                    u.middle_name,
-                    sp.student_number,
-                    g.id AS group_id,
-                    g.name AS group_name
+                SELECT u.id, u.email, u.first_name, u.last_name, u.middle_name, sp.student_number, g.id AS group_id, g.name AS group_name
                 FROM users u
                 JOIN student_profiles sp
                     ON sp.user_id = u.id
@@ -34,9 +19,7 @@ router.get("/profile",requireAuth,requireStudent,async (request, response) => {
                 [request.user.id]
             );
             if (result.rowCount === 0) {
-                return response.status(404).json({
-                    error: "Профиль студента не найден"
-                });
+                return response.status(404).json({ error: "Профиль студента не найден" });
             }
             const student = result.rows[0];
             response.json({
@@ -57,13 +40,8 @@ router.get("/profile",requireAuth,requireStudent,async (request, response) => {
                 }
             });
         } catch (error) {
-            console.error(
-                "Ошибка получения профиля студента:",
-                error
-            );
-            response.status(500).json({
-                error: "Ошибка получения профиля студента"
-            });
+            console.error("Ошибка получения профиля студента:", error);
+            response.status(500).json({ error: "Ошибка получения профиля студента" });
         }
     }
 );

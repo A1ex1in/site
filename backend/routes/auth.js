@@ -1,13 +1,7 @@
 const express = require("express");
 const argon2 = require("argon2");
-
 const pool = require("../db");
-
-const {
-    requireAuth
-} = require("../middleware/auth");
-
-
+const { requireAuth } = require("../middleware/auth");
 const router = express.Router();
 
 router.get("/me", requireAuth, (request, response) => {
@@ -28,18 +22,11 @@ router.get("/me", requireAuth, (request, response) => {
 router.post("/logout", requireAuth, (request, response) => {
     request.session.destroy((error) => {
         if (error) {
-            console.error(
-                "Ошибка завершения сессии:",
-                error
-            );
-            return response.status(500).json({
-                error: "Не удалось выйти из системы"
-            });
+            console.error("Ошибка завершения сессии:", error);
+            return response.status(500).json({ error: "Не удалось выйти из системы" });
         }
         response.clearCookie("site.sid");
-        response.json({
-            message: "Выход выполнен"
-        });
+        response.json({ message: "Выход выполнен" });
     });
 });
 
@@ -56,10 +43,7 @@ router.post("/register", async (request, response) => {
             studentNumber
         } = request.body;
         if (!email || !password || !firstName || !lastName) {
-
-            return response.status(400).json({
-                error: "Не заполнены обязательные поля"
-            });
+            return response.status(400).json({ error: "Не заполнены обязательные поля" });
         }
         const existingUser = await client.query(
             `
@@ -70,9 +54,7 @@ router.post("/register", async (request, response) => {
             [email]
         );
         if (existingUser.rowCount > 0) {
-            return response.status(409).json({
-                error: "Пользователь с таким email уже существует"
-            });
+            return response.status(409).json({ error: "Пользователь с таким email уже существует" });
         }
         if (groupId) {
             const groupResult = await client.query(
@@ -85,33 +67,15 @@ router.post("/register", async (request, response) => {
                 [groupId]
             );
             if (groupResult.rowCount === 0) {
-                return response.status(400).json({
-                    error: "Указанная учебная группа не существует"
-                });
+                return response.status(400).json({ error: "Указанная учебная группа не существует" });
             }
         }
         const passwordHash = await argon2.hash(password);
         await client.query("BEGIN");
         const userResult = await client.query(
             `
-            INSERT INTO users (
-                email,
-                password_hash,
-                first_name,
-                last_name,
-                middle_name,
-                role,
-                status
-            )
-            VALUES (
-                $1,
-                $2,
-                $3,
-                $4,
-                $5,
-                'student',
-                'pending'
-            )
+            INSERT INTO users (email, password_hash, first_name, last_name, middle_name, role, status)
+            VALUES ($1, $2, $3, $4, $5, 'student', 'pending')
             RETURNING id
             `,
             [
@@ -125,16 +89,8 @@ router.post("/register", async (request, response) => {
         const userId = userResult.rows[0].id;
         await client.query(
             `
-            INSERT INTO student_profiles (
-                user_id,
-                group_id,
-                student_number
-            )
-            VALUES (
-                $1,
-                $2,
-                $3
-            )
+            INSERT INTO student_profiles (user_id, group_id, student_number)
+            VALUES ($1, $2, $3)
             `,
             [
                 userId,
@@ -150,9 +106,7 @@ router.post("/register", async (request, response) => {
     } catch (error) {
         await client.query("ROLLBACK");
         console.error("Ошибка регистрации:", error);
-        response.status(500).json({
-            error: "Ошибка регистрации"
-        });
+        response.status(500).json({ error: "Ошибка регистрации" });
     } finally {
         client.release();
     }
@@ -165,30 +119,18 @@ router.post("/login", async (request, response) => {
             password
         } = request.body;
         if (!email || !password) {
-            return response.status(400).json({
-                error: "Необходимо указать email и пароль"
-            });
+            return response.status(400).json({ error: "Необходимо указать email и пароль" });
         }
         const result = await pool.query(
             `
-            SELECT
-                id,
-                email,
-                password_hash,
-                first_name,
-                last_name,
-                middle_name,
-                role,
-                status
+            SELECT id, email, password_hash, first_name, last_name, middle_name, role, status
             FROM users
             WHERE LOWER(email) = LOWER($1)
             `,
             [email.trim()]
         );
         if (result.rowCount === 0) {
-            return response.status(401).json({
-                error: "Неверный email или пароль"
-            });
+            return response.status(401).json({ error: "Неверный email или пароль" });
         }
         const user = result.rows[0];
         const passwordIsValid =
@@ -197,29 +139,19 @@ router.post("/login", async (request, response) => {
                 password
             );
         if (!passwordIsValid) {
-            return response.status(401).json({
-                error: "Неверный email или пароль"
-            });
+            return response.status(401).json({ error: "Неверный email или пароль" });
         }
         if (user.status !== "active") {
             if (user.status === "pending") {
-                return response.status(403).json({
-                    error: "Регистрация ещё не подтверждена преподавателем"
-                });
+                return response.status(403).json({ error: "Регистрация ещё не подтверждена преподавателем" });
             }
             if (user.status === "rejected") {
-                return response.status(403).json({
-                    error: "Регистрация отклонена"
-                });
+                return response.status(403).json({ error: "Регистрация отклонена" });
             }
             if (user.status === "blocked") {
-                return response.status(403).json({
-                    error: "Учётная запись заблокирована"
-                });
+                return response.status(403).json({ error: "Учётная запись заблокирована" });
             }
-            return response.status(403).json({
-                error: "Доступ к учётной записи запрещён"
-            });
+            return response.status(403).json({ error: "Доступ к учётной записи запрещён" });
         }
         await new Promise((resolve, reject) => {
             request.session.regenerate((error) => {
@@ -247,13 +179,8 @@ router.post("/login", async (request, response) => {
             }
         });
     } catch (error) {
-        console.error(
-            "Ошибка авторизации:",
-            error
-        );
-        response.status(500).json({
-            error: "Ошибка авторизации"
-        });
+        console.error("Ошибка авторизации:", error);
+        response.status(500).json({ error: "Ошибка авторизации" });
     }
 });
 

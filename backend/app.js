@@ -1,33 +1,15 @@
 const express = require("express");
 const cors = require("cors");
 const session = require("express-session");
-
 const pool = require("./db");
 const config = require("./config");
-
-
-const pgSession =
-    require("connect-pg-simple")(session);
-
-
-const authRoutes =
-    require("./routes/auth");
-
-const groupsRoutes =
-    require("./routes/groups");
-
-const studentRoutes =
-    require("./routes/student");
-
-const studentsRoutes =
-    require("./routes/students");
-
-const teacherRoutes =
-    require("./routes/teacher");
-
-
+const pgSession = require("connect-pg-simple")(session);
+const authRoutes = require("./routes/auth");
+const groupsRoutes = require("./routes/groups");
+const studentRoutes = require("./routes/student");
+const studentsRoutes =  require("./routes/students");
+const teacherRoutes = require("./routes/teacher");
 const app = express();
-
 
 // ------------------------------------------------------------
 // CORS
@@ -40,13 +22,11 @@ app.use(
     })
 );
 
-
 // ------------------------------------------------------------
 // JSON
 // ------------------------------------------------------------
 
 app.use(express.json());
-
 
 // ------------------------------------------------------------
 // Sessions
@@ -58,14 +38,10 @@ app.use(
             pool: pool,
             tableName: "user_sessions"
         }),
-
         name: "site.sid",
-
         secret: config.sessionSecret,
-
         resave: false,
         saveUninitialized: false,
-
         cookie: {
             httpOnly: true,
             secure: false,
@@ -74,7 +50,6 @@ app.use(
         }
     })
 );
-
 
 // ------------------------------------------------------------
 // Routes
@@ -104,5 +79,6 @@ app.use(
     "/api/teacher",
     teacherRoutes
 );
+
 
 module.exports = app;
