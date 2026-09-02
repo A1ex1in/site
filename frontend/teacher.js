@@ -445,29 +445,30 @@ async function loadStudentDetails(studentId) {
     selectedStudentId = student.id;
     selectedStudentStatus = student.status;
     const fullName = [student.last_name, student.first_name, student.middle_name].filter(Boolean).join(" ");
+
     studentDetails.innerHTML = "";
+
     const nameElement = document.createElement("p");
     nameElement.textContent = `ФИО: ${fullName}`;
-    studentDetails.appendChild(nameElement);
+
     const emailElement = document.createElement("p");
     emailElement.textContent = `Email: ${student.email}`;
-    studentDetails.appendChild(emailElement);
+
     const numberElement = document.createElement("p");
     numberElement.textContent = `Номер студента: ${student.student_number ?? "Не указан"}`;
-    studentDetails.appendChild(numberElement);
+
     const statusElement = document.createElement("p");
     statusElement.textContent = `Статус: ${student.status}`;
-    studentDetails.appendChild(statusElement);
+
     const groupElement = document.createElement("p");
-    groupElement.textContent =`Группа: ${ student.group_name ?? "Не назначена"}`;
+    groupElement.textContent = `Группа: ${student.group_name ?? "Не назначена"}`;
+
     studentDetails.appendChild(nameElement);
     studentDetails.appendChild(emailElement);
     studentDetails.appendChild(numberElement);
     studentDetails.appendChild(statusElement);
     studentDetails.appendChild(groupElement);
-    await loadGroupsForStudent(
-      student.group_id
-    );
+    await loadGroupsForStudent(student.group_id);
     if (student.status === "blocked") {
       studentStatusButton.textContent = "Разблокировать";
     } else {
@@ -505,7 +506,6 @@ async function loadGroupsForStudent(currentGroupId) {
     studentGroupSelect.appendChild(option);
   }
 }
-
 
 async function init() {
   const accessAllowed = await checkTeacherAccess();
