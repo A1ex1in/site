@@ -17,6 +17,7 @@ BEGIN;
 
 TRUNCATE TABLE
     user_sessions,
+    material_files,
     materials,
     courses,
     student_profiles,

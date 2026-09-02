@@ -32,7 +32,14 @@ const materialTitle = document.getElementById("materialTitle");
 const materialType = document.getElementById("materialType");
 const materialDescription = document.getElementById("materialDescription");
 const materialsList = document.getElementById("materialsList");
+const materialFilesSection = document.getElementById("materialFilesSection");
+const materialFilesTitle = document.getElementById("materialFilesTitle");
+const materialFileForm = document.getElementById("materialFileForm");
+const materialFileInput = document.getElementById("materialFileInput");
+const materialFilesList = document.getElementById("materialFilesList");
 
+let selectedMaterialId = null;
+let selectedMaterialTitle = "";
 let selectedCourseId = null;
 let selectedStudentId = null;
 let selectedGroupId = null;
@@ -279,6 +286,39 @@ disciplineForm.addEventListener("submit", async (event) => {
   }
 );
 
+materialFileForm.addEventListener("submit",async (event) => {
+  event.preventDefault();
+  if (!selectedMaterialId) {
+    message.textContent = "Сначала выберите учебный материал.";
+    return;
+  }
+  const file = materialFileInput.files[0];
+  if (!file) {
+    message.textContent = "Выберите файл.";
+    return;
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/materials/${selectedMaterialId}/files`,{
+      method: "POST",
+      credentials: "include",
+      body: formData
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка загрузки файла.";
+      return;
+    }
+    message.textContent = data.message;
+    materialFileForm.reset();
+    await loadMaterialFiles(selectedMaterialId, selectedMaterialTitle);
+  } catch (error) {
+    console.error("Ошибка загрузки файла:", error);
+    message.textContent = "Не удалось загрузить файл.";
+  }
+});
+
 async function loadMaterials(courseId, courseName = "") {
   try {
     const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/materials`,{
@@ -303,11 +343,17 @@ async function loadMaterials(courseId, courseName = "") {
       titleElement.textContent = material.title;
       const infoElement = document.createElement("span");
       infoElement.textContent = ` — ${material.material_type} — ${material.is_published ? "опубликован" : "черновик"}`;
+      const filesButton = document.createElement("button");
+      filesButton.textContent = "Файлы";
+      filesButton.addEventListener("click",async () => {
+        await loadMaterialFiles(material.id, material.title);
+      });
       if (material.description) {
         infoElement.textContent += ` — ${material.description}`;
       }
       container.appendChild(titleElement);
       container.appendChild(infoElement);
+      container.appendChild(filesButton);
       materialsList.appendChild(container);
     }
   } catch (error) {
@@ -702,6 +748,104 @@ async function loadGroupsForStudent(currentGroupId) {
     studentGroupSelect.appendChild(option);
   }
 }
+
+async function loadMaterialFiles(materialId, materialTitle) {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/materials/${materialId}/files`,{
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка получения файлов материала.";
+      return;
+    }
+    selectedMaterialId = materialId;
+    selectedMaterialTitle = materialTitle;
+    materialFilesSection.hidden = false;
+    materialFilesTitle.textContent = `Файлы материала: ${materialTitle}`;
+    materialFilesList.innerHTML = "";
+    if (data.length === 0) {
+      materialFilesList.textContent = "Файлы пока не загружены.";
+      return;
+    }
+    for (const file of data) {
+      const container = document.createElement("div");
+      const downloadButton = document.createElement("button");
+      downloadButton.textContent = file.original_name;
+      downloadButton.addEventListener("click",async () => {
+        await downloadMaterialFile(file.id,file.original_name);
+      });
+      const infoElement = document.createElement("span");
+      infoElement.textContent = ` — ${formatFileSize(file.size_bytes)} — ${file.mime_type}`;
+      const deleteButton = document.createElement("button");
+      deleteButton.textContent = "Удалить";
+      deleteButton.addEventListener("click",async () => {
+        await deleteMaterialFile(file.id,file.original_name);
+      });
+      container.appendChild(downloadButton);
+      container.appendChild(infoElement);
+      container.appendChild(deleteButton);
+      materialFilesList.appendChild(container);
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки файлов материала:", error);
+    message.textContent = "Не удалось загрузить файлы материала.";
+  }
+}
+
+async function downloadMaterialFile(fileId, fileName) {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/files/${fileId}/download`,{
+      credentials: "include"
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      message.textContent = data.error || "Ошибка скачивания файла.";
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Ошибка скачивания файла:", error);
+    message.textContent = "Не удалось скачать файл.";
+  }
+}
+
+async function deleteMaterialFile(fileId, fileName) {
+  const confirmed = confirm(`Удалить файл "${fileName}"?`);
+  if (!confirmed) return;
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/files/${fileId}`,{
+      method: "DELETE",
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка удаления файла.";
+      return;
+    }
+    message.textContent = data.message;
+    await loadMaterialFiles(selectedMaterialId,selectedMaterialTitle);
+  } catch (error) {
+    console.error("Ошибка удаления файла:", error);
+    message.textContent = "Не удалось удалить файл.";
+  }
+}
+
+function formatFileSize(sizeBytes) {
+  const size = Number(sizeBytes);
+  if (size < 1024) return `${size} Б`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} КБ`;
+  return `${(size / (1024 * 1024)).toFixed(1)} МБ`;
+}
+
 
 async function init() {
   const accessAllowed = await checkTeacherAccess();

@@ -2,11 +2,12 @@ const express = require("express");
 const pool = require("../db");
 const { requireAuth, requireTeacher } = require("../middleware/auth");
 const router = express.Router();
+const fs = require("fs");
+const uploadMaterialFile = require("../middleware/materialUpload");
+const path = require("path");
+const config = require("../config");
 
-// ------------------------------------------------------------
 // Создать учебный материал
-// ------------------------------------------------------------
-
 router.post("/courses/:id/materials",requireAuth,requireTeacher,async (request, response) => {
   try {
     const courseId = request.params.id;
@@ -66,10 +67,7 @@ router.post("/courses/:id/materials",requireAuth,requireTeacher,async (request, 
   }
 });
 
-// ------------------------------------------------------------
 // Получить материалы учебного курса
-// ------------------------------------------------------------
-
 router.get("/courses/:id/materials",requireAuth,requireTeacher,async (request, response) => {
   try {
     const courseId = request.params.id;
@@ -106,10 +104,7 @@ router.get("/courses/:id/materials",requireAuth,requireTeacher,async (request, r
   }
 });
 
-// ------------------------------------------------------------
 // Создать учебный курс
-// ------------------------------------------------------------
-
 router.post("/courses",requireAuth,requireTeacher,async (request, response) => {
   try {
     const { disciplineId, groupId, academicYear, semester } = request.body;
@@ -179,10 +174,7 @@ router.post("/courses",requireAuth,requireTeacher,async (request, response) => {
   }
 });
 
-// ------------------------------------------------------------
 // Получить учебные курсы преподавателя
-// ------------------------------------------------------------
-
 router.get("/courses",requireAuth,requireTeacher,async (request, response) => {
   try {
     const result = await pool.query(`
@@ -211,10 +203,7 @@ router.get("/courses",requireAuth,requireTeacher,async (request, response) => {
   }
 });
 
-// ------------------------------------------------------------
 // Создать дисциплину
-// ------------------------------------------------------------
-
 router.post("/disciplines",requireAuth,requireTeacher,async (request, response) => {
     try {
       const { name, code, description } = request.body;
@@ -257,10 +246,7 @@ router.post("/disciplines",requireAuth,requireTeacher,async (request, response) 
   }
 );
 
-// ------------------------------------------------------------
 // Получить все дисциплины
-// ------------------------------------------------------------
-
 router.get("/disciplines",requireAuth,requireTeacher,async (request, response) => {
     try {
       const result = await pool.query(`
@@ -276,10 +262,7 @@ router.get("/disciplines",requireAuth,requireTeacher,async (request, response) =
   }
 );
 
-// ------------------------------------------------------------
 // Получить все группы
-// ------------------------------------------------------------
-
 router.get("/groups",requireAuth,requireTeacher,async (request, response) => {
     try {
       const result = await pool.query(`
@@ -304,10 +287,7 @@ router.get("/groups",requireAuth,requireTeacher,async (request, response) => {
   }
 );
 
-// ------------------------------------------------------------
 // Создать группу
-// ------------------------------------------------------------
-
 router.post("/groups",requireAuth,requireTeacher,async (request, response) => {
     try {
       const { name, description } = request.body;
@@ -342,10 +322,7 @@ router.post("/groups",requireAuth,requireTeacher,async (request, response) => {
   }
 );
 
-// ------------------------------------------------------------
 // Получить студентов выбранной группы
-// ------------------------------------------------------------
-
 router.get("/groups/:id/students",requireAuth,requireTeacher,async (request, response) => {
     try {
       const groupId = request.params.id;
@@ -387,10 +364,7 @@ router.get("/groups/:id/students",requireAuth,requireTeacher,async (request, res
   }
 );
 
-// ------------------------------------------------------------
 // Получить профиль конкретного студента
-// ------------------------------------------------------------
-
 router.get("/students/:id",requireAuth,requireTeacher,async (request, response) => {
     try {
       const studentId = request.params.id;
@@ -422,10 +396,7 @@ router.get("/students/:id",requireAuth,requireTeacher,async (request, response) 
   }
 );
 
-// ------------------------------------------------------------
 // Изменить группу студента
-// ------------------------------------------------------------
-
 router.patch("/students/:id/group",requireAuth,requireTeacher,async (request, response) => {
     try {
       const studentId = request.params.id;
@@ -474,10 +445,7 @@ router.patch("/students/:id/group",requireAuth,requireTeacher,async (request, re
   }
 );
 
-// ------------------------------------------------------------
 // Изменить статус студента
-// ------------------------------------------------------------
-
 router.patch("/students/:id/status",requireAuth,requireTeacher,async (request, response) => {
     try {
       const studentId = request.params.id;
@@ -518,6 +486,176 @@ router.patch("/students/:id/status",requireAuth,requireTeacher,async (request, r
     }
   }
 );
+
+// Загрузить файл учебного материала
+router.post("/materials/:materialId/files", requireAuth,requireTeacher,requireMaterialAccess,uploadMaterialFile,async (request, response) => {
+    try {
+      if (!request.file) {
+        return response.status(400).json({ error: "Необходимо выбрать файл" });
+      }
+      const storageKey = `materials/${request.file.filename}`;
+      const result = await pool.query(`
+        INSERT INTO material_files (material_id, uploaded_by, original_name, stored_name, storage_key, mime_type, size_bytes)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, material_id, original_name, mime_type, size_bytes, created_at
+      `,[
+        request.material.id,
+        request.user.id,
+        request.file.originalname,
+        request.file.filename,
+        storageKey,
+        request.file.mimetype,
+        request.file.size
+      ]);
+      response.status(201).json({
+        message: "Файл загружен",
+        file: result.rows[0]
+      });
+    } catch (error) {
+      if (request.file?.path) {
+        await fs.promises.unlink(request.file.path).catch(() => {});
+      }
+      console.error("Ошибка сохранения файла материала:", error);
+      response.status(500).json({ error: "Ошибка сохранения файла" });
+    }
+  }
+);
+
+// Получить файлы учебного материала
+router.get("/materials/:materialId/files",requireAuth,requireTeacher,requireMaterialAccess,async (request, response) => {
+    try {
+      const result = await pool.query(`
+        SELECT id, material_id, original_name, mime_type, size_bytes, created_at
+        FROM material_files
+        WHERE material_id = $1
+        ORDER BY created_at, id
+      `,[request.material.id]);
+      response.json(result.rows);
+    } catch (error) {
+      console.error("Ошибка получения файлов материала:", error);
+      response.status(500).json({ error: "Ошибка получения файлов материала" });
+    }
+  }
+);
+
+// Скачать файл учебного материала
+router.get("/files/:id/download",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const fileId = request.params.id;
+    if (!/^\d+$/.test(fileId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор файла" });
+    }
+    const result = await pool.query(`
+      SELECT mf.id, mf.original_name, mf.storage_key, mf.mime_type, mf.size_bytes
+      FROM material_files mf
+      JOIN materials m ON m.id = mf.material_id
+      JOIN courses c ON c.id = m.course_id
+      WHERE mf.id = $1
+        AND c.teacher_id = $2
+    `,[fileId, request.user.id]);
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: "Файл не найден" });
+    }
+    const file = result.rows[0];
+    const filePath = path.resolve(config.storageRoot,file.storage_key);
+    const relativePath = path.relative(config.storageRoot,filePath);
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+      console.error("Некорректный путь файла:", file.storage_key);
+      return response.status(500).json({ error: "Ошибка доступа к файлу" });
+    }
+    try {
+      await fs.promises.access(filePath,fs.constants.R_OK);
+    } catch {
+      return response.status(404).json({ error: "Файл отсутствует в хранилище" });
+    }
+    response.download(filePath,file.original_name,(error) => {
+      if (!error) return;
+      console.error("Ошибка скачивания файла:", error);
+      if (!response.headersSent) {
+        response.status(500).json({ error: "Ошибка скачивания файла" });
+      }
+    });
+  } catch (error) {
+    console.error("Ошибка получения файла:", error);
+    response.status(500).json({ error: "Ошибка получения файла" });
+  }
+});
+
+// Удалить файл учебного материала
+router.delete("/files/:id",requireAuth,requireTeacher,async (request, response) => {
+  let client;
+  try {
+    const fileId = request.params.id;
+    if (!/^\d+$/.test(fileId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор файла" });
+    }
+    client = await pool.connect();
+    await client.query("BEGIN");
+    const result = await client.query(`
+      SELECT mf.id, mf.original_name, mf.storage_key
+      FROM material_files mf
+      JOIN materials m ON m.id = mf.material_id
+      JOIN courses c ON c.id = m.course_id
+      WHERE mf.id = $1
+        AND c.teacher_id = $2
+      FOR UPDATE OF mf
+    `,[fileId, request.user.id]);
+    if (result.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return response.status(404).json({ error: "Файл не найден" });
+    }
+    const file = result.rows[0];
+    const filePath = path.resolve(config.storageRoot,file.storage_key);
+    const relativePath = path.relative(config.storageRoot,filePath);
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+      await client.query("ROLLBACK");
+      console.error("Некорректный путь файла:", file.storage_key);
+      return response.status(500).json({ error: "Ошибка доступа к файлу" });
+    }
+    await client.query(`
+      DELETE FROM material_files
+      WHERE id = $1
+    `,[fileId]);
+    try {
+      await fs.promises.unlink(filePath);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    await client.query("COMMIT");
+    response.json({ message: "Файл удалён" });
+  } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(() => {});
+    console.error("Ошибка удаления файла:", error);
+    response.status(500).json({ error: "Ошибка удаления файла" });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+
+async function requireMaterialAccess(request, response, next) {
+  try {
+    const materialId = request.params.materialId;
+    if (!/^\d+$/.test(materialId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор материала" });
+    }
+    const result = await pool.query(`
+      SELECT m.id, m.course_id
+      FROM materials m
+      JOIN courses c ON c.id = m.course_id
+      WHERE m.id = $1
+        AND c.teacher_id = $2
+    `,[materialId, request.user.id]);
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: "Учебный материал не найден" });
+    }
+    request.material = result.rows[0];
+    next();
+  } catch (error) {
+    console.error("Ошибка проверки доступа к материалу:", error);
+    response.status(500).json({ error: "Ошибка проверки доступа к материалу" });
+  }
+}
 
 
 module.exports = router;
