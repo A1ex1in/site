@@ -16,10 +16,10 @@ const app = express();
 // ------------------------------------------------------------
 
 app.use(
-    cors({
-        origin: config.frontendOrigin,
-        credentials: true
-    })
+  cors({
+    origin: config.frontendOrigin,
+    credentials: true
+  })
 );
 
 // ------------------------------------------------------------
@@ -33,22 +33,22 @@ app.use(express.json());
 // ------------------------------------------------------------
 
 app.use(
-    session({
-        store: new pgSession({
-            pool: pool,
-            tableName: "user_sessions"
-        }),
-        name: "site.sid",
-        secret: config.sessionSecret,
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-            httpOnly: true,
-            secure: false,
-            sameSite: "lax",
-            maxAge: 1000 * 60 * 60 * 8
-        }
-    })
+  session({
+    store: new pgSession({
+      pool: pool,
+      tableName: "user_sessions"
+    }),
+    name: "site.sid",
+    secret: config.sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      maxAge: 1000 * 60 * 60 * 8
+    }
+  })
 );
 
 // ------------------------------------------------------------
@@ -56,28 +56,28 @@ app.use(
 // ------------------------------------------------------------
 
 app.use(
-    "/api/auth",
-    authRoutes
+  "/api/auth",
+  authRoutes
 );
 
 app.use(
-    "/api/groups",
-    groupsRoutes
+  "/api/groups",
+  groupsRoutes
 );
 
 app.use(
-    "/api/student",
-    studentRoutes
+  "/api/student",
+  studentRoutes
 );
 
 app.use(
-    "/api/students",
-    studentsRoutes
+  "/api/students",
+  studentsRoutes
 );
 
 app.use(
-    "/api/teacher",
-    teacherRoutes
+  "/api/teacher",
+  teacherRoutes
 );
 
 
