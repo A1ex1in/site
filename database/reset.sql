@@ -17,6 +17,7 @@ BEGIN;
 
 TRUNCATE TABLE
     user_sessions,
+    materials,
     courses,
     student_profiles,
     disciplines,
@@ -33,6 +34,7 @@ SELECT COUNT(*) FROM student_groups;
 SELECT COUNT(*) FROM student_profiles;
 SELECT COUNT(*) FROM disciplines;
 SELECT COUNT(*) FROM courses;
+SELECT COUNT(*) FROM materials;
 
 
 SELECT * FROM users;
@@ -40,4 +42,5 @@ SELECT * FROM student_groups;
 SELECT * FROM student_profiles;
 SELECT * FROM disciplines;
 SELECT * FROM courses;
+SELECT * FROM materials;
 */

@@ -4,6 +4,214 @@ const { requireAuth, requireTeacher } = require("../middleware/auth");
 const router = express.Router();
 
 // ------------------------------------------------------------
+// Создать учебный материал
+// ------------------------------------------------------------
+
+router.post("/courses/:id/materials",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const courseId = request.params.id;
+    const { title, description, materialType } = request.body;
+    if (!/^\d+$/.test(courseId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор курса" });
+    }
+    const normalizedTitle = typeof title === "string" ? title.trim() : "";
+    if (!normalizedTitle) {
+      return response.status(400).json({ error: "Необходимо указать название материала" });
+    }
+    const allowedTypes = ["lecture", "presentation", "methodical", "other"];
+    const normalizedType = typeof materialType === "string" ? materialType.trim() : "other";
+    if (!allowedTypes.includes(normalizedType)) {
+      return response.status(400).json({ error: "Недопустимый тип учебного материала" });
+    }
+    const courseResult = await pool.query(`
+      SELECT id
+      FROM courses
+      WHERE id = $1
+        AND teacher_id = $2
+        AND is_active = TRUE
+    `,[courseId, request.user.id]);
+    if (courseResult.rowCount === 0) {
+      return response.status(404).json({ error: "Учебный курс не найден" });
+    }
+    const result = await pool.query(`
+      INSERT INTO materials (
+        course_id,
+        title,
+        description,
+        material_type
+      )
+      VALUES ($1, $2, $3, $4)
+      RETURNING
+        id,
+        course_id,
+        title,
+        description,
+        material_type,
+        is_published,
+        created_at,
+        updated_at
+    `,[
+      courseId,
+      normalizedTitle,
+      typeof description === "string" ? description.trim() || null : null,
+      normalizedType
+    ]);
+    response.status(201).json({
+      message: "Учебный материал создан",
+      material: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Ошибка создания учебного материала:", error);
+    response.status(500).json({ error: "Ошибка создания учебного материала" });
+  }
+});
+
+// ------------------------------------------------------------
+// Получить материалы учебного курса
+// ------------------------------------------------------------
+
+router.get("/courses/:id/materials",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const courseId = request.params.id;
+    if (!/^\d+$/.test(courseId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор курса" });
+    }
+    const courseResult = await pool.query(`
+      SELECT id
+      FROM courses
+      WHERE id = $1
+        AND teacher_id = $2
+    `,[courseId, request.user.id]);
+    if (courseResult.rowCount === 0) {
+      return response.status(404).json({ error: "Учебный курс не найден" });
+    }
+    const result = await pool.query(`
+      SELECT
+        id,
+        course_id,
+        title,
+        description,
+        material_type,
+        is_published,
+        created_at,
+        updated_at
+      FROM materials
+      WHERE course_id = $1
+      ORDER BY created_at DESC, id DESC
+    `,[courseId]);
+    response.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка получения материалов курса:", error);
+    response.status(500).json({ error: "Ошибка получения материалов курса" });
+  }
+});
+
+// ------------------------------------------------------------
+// Создать учебный курс
+// ------------------------------------------------------------
+
+router.post("/courses",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const { disciplineId, groupId, academicYear, semester } = request.body;
+    if (!disciplineId || !/^\d+$/.test(String(disciplineId))) {
+      return response.status(400).json({ error: "Необходимо выбрать дисциплину" });
+    }
+    if (!groupId || !/^\d+$/.test(String(groupId))) {
+      return response.status(400).json({ error: "Необходимо выбрать учебную группу" });
+    }
+    const normalizedAcademicYear = typeof academicYear === "string" ? academicYear.trim() : "";
+    if (!/^\d{4}\/\d{4}$/.test(normalizedAcademicYear)) {
+      return response.status(400).json({ error: "Учебный год должен быть указан в формате 2026/2027" });
+    }
+    const [startYear, endYear] = normalizedAcademicYear.split("/").map(Number);
+    if (endYear !== startYear + 1) {
+      return response.status(400).json({ error: "Некорректно указан учебный год" });
+    }
+    const semesterNumber = Number(semester);
+    if (![1, 2].includes(semesterNumber)) {
+      return response.status(400).json({ error: "Семестр должен быть 1 или 2" });
+    }
+    const disciplineResult = await pool.query(`
+      SELECT id
+      FROM disciplines
+      WHERE id = $1
+        AND is_active = TRUE
+    `,[disciplineId]);
+    if (disciplineResult.rowCount === 0) {
+      return response.status(404).json({ error: "Дисциплина не найдена" });
+    }
+    const groupResult = await pool.query(`
+      SELECT id
+      FROM student_groups
+      WHERE id = $1
+        AND is_active = TRUE
+    `,[groupId]);
+    if (groupResult.rowCount === 0) {
+      return response.status(404).json({ error: "Учебная группа не найдена" });
+    }
+    const result = await pool.query(`
+      INSERT INTO courses (
+        discipline_id,
+        group_id,
+        teacher_id,
+        academic_year,
+        semester
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, discipline_id, group_id, teacher_id, academic_year, semester, is_active, created_at
+    `,[
+      disciplineId,
+      groupId,
+      request.user.id,
+      normalizedAcademicYear,
+      semesterNumber
+    ]);
+    response.status(201).json({
+      message: "Учебный курс создан",
+      course: result.rows[0]
+    });
+  } catch (error) {
+    if (error.code === "23505" && error.constraint === "course_unique") {
+      return response.status(409).json({ error: "Такой учебный курс уже существует" });
+    }
+    console.error("Ошибка создания учебного курса:", error);
+    response.status(500).json({ error: "Ошибка создания учебного курса" });
+  }
+});
+
+// ------------------------------------------------------------
+// Получить учебные курсы преподавателя
+// ------------------------------------------------------------
+
+router.get("/courses",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        c.id,
+        c.academic_year,
+        c.semester,
+        c.is_active,
+        c.created_at,
+        d.id AS discipline_id,
+        d.name AS discipline_name,
+        d.code AS discipline_code,
+        g.id AS group_id,
+        g.name AS group_name
+      FROM courses c
+      JOIN disciplines d ON d.id = c.discipline_id
+      JOIN student_groups g ON g.id = c.group_id
+      WHERE c.teacher_id = $1
+      ORDER BY c.academic_year DESC, c.semester, d.name, g.name
+    `,[request.user.id]);
+
+    response.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка получения учебных курсов:", error);
+    response.status(500).json({ error: "Ошибка получения списка учебных курсов" });
+  }
+});
+
+// ------------------------------------------------------------
 // Создать дисциплину
 // ------------------------------------------------------------
 

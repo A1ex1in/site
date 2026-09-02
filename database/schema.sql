@@ -167,3 +167,34 @@ CREATE TABLE user_sessions (
 
 CREATE INDEX user_sessions_expire_idx
 ON user_sessions (expire);
+
+
+-- ------------------------------------------------------------
+-- Учебные материалы
+-- ------------------------------------------------------------
+
+CREATE TABLE materials (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    course_id BIGINT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    material_type VARCHAR(50) NOT NULL DEFAULT 'other',
+    is_published BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_material_course
+        FOREIGN KEY (course_id)
+        REFERENCES courses(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT material_type_check
+        CHECK (
+            material_type IN (
+                'lecture',
+                'presentation',
+                'methodical',
+                'other'
+            )
+        )
+);

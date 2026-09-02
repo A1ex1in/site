@@ -66,6 +66,58 @@
             Загрузка дисциплин...
         </div>
 
+    <hr>
+        <h2>Учебные курсы</h2>
+        <form id="courseForm">
+            <div>
+                <label for="courseDiscipline">Дисциплина</label>
+                <select id="courseDiscipline" required></select>
+            </div>
+            <div>
+                <label for="courseGroup">Группа</label>
+                <select id="courseGroup" required></select>
+            </div>
+            <div>
+                <label for="courseAcademicYear">Учебный год</label>
+                <input id="courseAcademicYear" type="text" placeholder="2026/2027" required>
+            </div>
+            <div>
+                <label for="courseSemester">Семестр</label>
+                <select id="courseSemester" required>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                </select>
+            </div>
+            <button type="submit">Создать курс</button>
+        </form>
+        <div id="coursesList">Загрузка учебных курсов...</div>
+
+    <hr>
+        <section id="courseMaterialsSection" hidden>
+            <h2 id="courseMaterialsTitle">Материалы курса</h2>
+            <form id="materialForm">
+                <div>
+                    <label for="materialTitle">Название</label>
+                    <input id="materialTitle" type="text" required>
+                </div>
+                <div>
+                    <label for="materialType">Тип материала</label>
+                    <select id="materialType">
+                        <option value="lecture">Лекция</option>
+                        <option value="presentation">Презентация</option>
+                        <option value="methodical">Методический материал</option>
+                        <option value="other">Прочее</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="materialDescription">Описание</label>
+                    <input id="materialDescription" type="text">
+                </div>
+                <button type="submit">Создать материал</button>
+            </form>
+            <div id="materialsList"></div>
+        </section>
+
     <script src="teacher.js"></script>
 </body>
 </html>

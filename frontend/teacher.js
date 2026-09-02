@@ -19,10 +19,98 @@ const disciplineNameInput = document.getElementById("disciplineName");
 const disciplineCodeInput = document.getElementById("disciplineCode");
 const disciplineDescriptionInput = document.getElementById("disciplineDescription");
 const disciplinesList = document.getElementById("disciplinesList");
+const courseForm = document.getElementById("courseForm");
+const courseDiscipline = document.getElementById("courseDiscipline");
+const courseGroup = document.getElementById("courseGroup");
+const courseAcademicYear = document.getElementById("courseAcademicYear");
+const courseSemester = document.getElementById("courseSemester");
+const coursesList = document.getElementById("coursesList");
+const courseMaterialsSection = document.getElementById("courseMaterialsSection");
+const courseMaterialsTitle = document.getElementById("courseMaterialsTitle");
+const materialForm = document.getElementById("materialForm");
+const materialTitle = document.getElementById("materialTitle");
+const materialType = document.getElementById("materialType");
+const materialDescription = document.getElementById("materialDescription");
+const materialsList = document.getElementById("materialsList");
 
+let selectedCourseId = null;
 let selectedStudentId = null;
 let selectedGroupId = null;
 let selectedStudentStatus = null;
+
+materialForm.addEventListener("submit",async (event) => {
+  event.preventDefault();
+  if (!selectedCourseId) {
+    message.textContent = "Сначала выберите учебный курс.";
+    return;
+  }
+  const title = materialTitle.value.trim();
+  const description = materialDescription.value.trim();
+  if (!title) {
+    message.textContent = "Введите название материала.";
+    return;
+  }
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/courses/${selectedCourseId}/materials`,{
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        title,
+        description,
+        materialType: materialType.value
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка создания материала.";
+      return;
+    }
+    message.textContent = data.message;
+    materialForm.reset();
+    await loadMaterials(selectedCourseId, courseMaterialsTitle.textContent.replace("Материалы курса: ", ""));
+  } catch (error) {
+    console.error("Ошибка создания материала:", error);
+    message.textContent = "Не удалось создать материал.";
+  }
+});
+
+courseForm.addEventListener("submit",async (event) => {
+  event.preventDefault();
+  const disciplineId = courseDiscipline.value;
+  const groupId = courseGroup.value;
+  const academicYear = courseAcademicYear.value.trim();
+  const semester = courseSemester.value;
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/courses`,{
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        disciplineId,
+        groupId,
+        academicYear,
+        semester
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка создания учебного курса.";
+      return;
+    }
+    message.textContent = data.message;
+    courseAcademicYear.value = "";
+    courseSemester.value = "1";
+    await loadCourses();
+  } catch (error) {
+    console.error("Ошибка создания учебного курса:", error);
+    message.textContent = "Не удалось создать учебный курс.";
+  }
+});
 
 logoutButton.addEventListener("click",async () => {
     try {
@@ -190,6 +278,114 @@ disciplineForm.addEventListener("submit", async (event) => {
     }
   }
 );
+
+async function loadMaterials(courseId, courseName = "") {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/materials`,{
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка получения материалов.";
+      return;
+    }
+    selectedCourseId = courseId;
+    courseMaterialsSection.hidden = false;
+    courseMaterialsTitle.textContent = courseName ? `Материалы курса: ${courseName}` : "Материалы курса";
+    materialsList.innerHTML = "";
+    if (data.length === 0) {
+      materialsList.textContent = "Материалы пока не созданы.";
+      return;
+    }
+    for (const material of data) {
+      const container = document.createElement("div");
+      const titleElement = document.createElement("strong");
+      titleElement.textContent = material.title;
+      const infoElement = document.createElement("span");
+      infoElement.textContent = ` — ${material.material_type} — ${material.is_published ? "опубликован" : "черновик"}`;
+      if (material.description) {
+        infoElement.textContent += ` — ${material.description}`;
+      }
+      container.appendChild(titleElement);
+      container.appendChild(infoElement);
+      materialsList.appendChild(container);
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки материалов:", error);
+    message.textContent = "Не удалось загрузить материалы.";
+  }
+}
+
+async function loadCourses() {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/courses`,{
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка получения учебных курсов.";
+      return;
+    }
+    coursesList.innerHTML = "";
+    if (data.length === 0) {
+      coursesList.textContent = "Учебные курсы пока не созданы.";
+      return;
+    }
+    for (const course of data) {
+      const container = document.createElement("div");
+      const disciplineElement = document.createElement("strong");
+      disciplineElement.textContent = course.discipline_name;
+      const infoElement = document.createElement("span");
+      infoElement.textContent = ` — ${course.group_name}` + ` — ${course.academic_year}` + ` — ${course.semester} семестр`;
+      const openButton = document.createElement("button");
+      openButton.textContent = "Материалы";
+      openButton.addEventListener("click",async () => {
+        await loadMaterials(course.id, `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`);
+      });
+      container.appendChild(disciplineElement);
+      container.appendChild(infoElement);
+      container.appendChild(openButton);
+      coursesList.appendChild(container);
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки учебных курсов:", error);
+    message.textContent = "Не удалось загрузить учебные курсы.";
+  }
+}
+
+async function loadCourseOptions() {
+  try {
+    const [groupsResponse, disciplinesResponse] = await Promise.all([
+      fetch(`${apiUrl}/api/teacher/groups`,{ credentials: "include" }),
+      fetch(`${apiUrl}/api/teacher/disciplines`,{ credentials: "include" })
+    ]);
+    const groups = await groupsResponse.json();
+    const disciplines = await disciplinesResponse.json();
+    if (!groupsResponse.ok || !disciplinesResponse.ok) {
+      message.textContent = "Ошибка загрузки данных для создания курса.";
+      return;
+    }
+    courseGroup.innerHTML = "";
+    courseDiscipline.innerHTML = "";
+    for (const group of groups) {
+      if (!group.is_active) continue;
+      const option = document.createElement("option");
+      option.value = group.id;
+      option.textContent = group.name;
+      courseGroup.appendChild(option);
+    }
+    for (const discipline of disciplines) {
+      if (!discipline.is_active) continue;
+      const option = document.createElement("option");
+      option.value = discipline.id;
+      option.textContent = discipline.code ? `${discipline.name} (${discipline.code})` : discipline.name;
+      courseDiscipline.appendChild(option);
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки данных курса:", error);
+    message.textContent = "Не удалось загрузить данные для создания курса.";
+  }
+}
 
 async function loadDisciplines() {
   try {
@@ -509,12 +705,12 @@ async function loadGroupsForStudent(currentGroupId) {
 
 async function init() {
   const accessAllowed = await checkTeacherAccess();
-  if (!accessAllowed) {
-    return;
-  }
+  if (!accessAllowed) return;
   await loadPendingStudents();
   await loadGroups();
   await loadDisciplines();
+  await loadCourseOptions();
+  await loadCourses();
 }
 
 init();
