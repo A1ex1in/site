@@ -41,6 +41,7 @@ const materialFilesList = document.getElementById("materialFilesList");
 let selectedMaterialId = null;
 let selectedMaterialTitle = "";
 let selectedCourseId = null;
+let selectedCourseName = "";
 let selectedStudentId = null;
 let selectedGroupId = null;
 let selectedStudentStatus = null;
@@ -77,7 +78,7 @@ materialForm.addEventListener("submit",async (event) => {
     }
     message.textContent = data.message;
     materialForm.reset();
-    await loadMaterials(selectedCourseId, courseMaterialsTitle.textContent.replace("Материалы курса: ", ""));
+    await loadMaterials(selectedCourseId,selectedCourseName);
   } catch (error) {
     console.error("Ошибка создания материала:", error);
     message.textContent = "Не удалось создать материал.";
@@ -330,6 +331,7 @@ async function loadMaterials(courseId, courseName = "") {
       return;
     }
     selectedCourseId = courseId;
+    selectedCourseName = courseName;
     courseMaterialsSection.hidden = false;
     courseMaterialsTitle.textContent = courseName ? `Материалы курса: ${courseName}` : "Материалы курса";
     materialsList.innerHTML = "";
@@ -345,20 +347,45 @@ async function loadMaterials(courseId, courseName = "") {
       infoElement.textContent = ` — ${material.material_type} — ${material.is_published ? "опубликован" : "черновик"}`;
       const filesButton = document.createElement("button");
       filesButton.textContent = "Файлы";
-      filesButton.addEventListener("click",async () => {
-        await loadMaterialFiles(material.id, material.title);
-      });
+      filesButton.addEventListener("click",async () => { await loadMaterialFiles(material.id, material.title); });
+      const publicationButton = document.createElement("button");
+      publicationButton.textContent = material.is_published ? "Снять с публикации" : "Опубликовать";
+      publicationButton.addEventListener("click",async () => { await changeMaterialPublication(material.id,!material.is_published); });
       if (material.description) {
         infoElement.textContent += ` — ${material.description}`;
       }
       container.appendChild(titleElement);
       container.appendChild(infoElement);
       container.appendChild(filesButton);
+      container.appendChild(publicationButton);
       materialsList.appendChild(container);
     }
   } catch (error) {
     console.error("Ошибка загрузки материалов:", error);
     message.textContent = "Не удалось загрузить материалы.";
+  }
+}
+
+async function changeMaterialPublication(materialId, isPublished) {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/materials/${materialId}/publication`,{
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      credentials: "include",
+      body: JSON.stringify({ isPublished })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка изменения публикации.";
+      return;
+    }
+    message.textContent = data.message;
+    await loadMaterials(selectedCourseId,selectedCourseName);
+  } catch (error) {
+    console.error("Ошибка изменения публикации:", error);
+    message.textContent = "Не удалось изменить публикацию материала.";
   }
 }
 
@@ -846,6 +873,31 @@ function formatFileSize(sizeBytes) {
   return `${(size / (1024 * 1024)).toFixed(1)} МБ`;
 }
 
+async function changeMaterialPublication(materialId, isPublished) {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/materials/${materialId}/publication`,{
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      credentials: "include",
+      body: JSON.stringify({ isPublished })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка изменения публикации.";
+      return;
+    }
+    message.textContent = data.message;
+    await loadMaterials(
+      selectedCourseId,
+      courseMaterialsTitle.textContent.replace("Материалы курса: ", "")
+    );
+  } catch (error) {
+    console.error("Ошибка изменения публикации:", error);
+    message.textContent = "Не удалось изменить публикацию материала.";
+  }
+}
 
 async function init() {
   const accessAllowed = await checkTeacherAccess();

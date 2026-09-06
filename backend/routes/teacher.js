@@ -632,6 +632,30 @@ router.delete("/files/:id",requireAuth,requireTeacher,async (request, response) 
   }
 });
 
+// Изменить публикацию учебного материала
+router.patch("/materials/:materialId/publication",requireAuth,requireTeacher,requireMaterialAccess,async (request, response) => {
+  try {
+    const { isPublished } = request.body;
+    if (typeof isPublished !== "boolean") {
+      return response.status(400).json({ error: "Некорректное состояние публикации" });
+    }
+    const result = await pool.query(`
+      UPDATE materials
+      SET
+        is_published = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, course_id, title, description, material_type, is_published, created_at, updated_at
+    `,[isPublished, request.material.id]);
+    response.json({
+      message: isPublished ? "Материал опубликован" : "Материал снят с публикации",
+      material: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Ошибка изменения публикации материала:", error);
+    response.status(500).json({ error: "Ошибка изменения публикации материала" });
+  }
+});
 
 async function requireMaterialAccess(request, response, next) {
   try {
@@ -656,6 +680,5 @@ async function requireMaterialAccess(request, response, next) {
     response.status(500).json({ error: "Ошибка проверки доступа к материалу" });
   }
 }
-
 
 module.exports = router;
