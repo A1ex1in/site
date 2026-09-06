@@ -1,13 +1,6 @@
 const express = require("express");
-
 const pool = require("../db");
-
-const {
-    requireAuth,
-    requireTeacher
-} = require("../middleware/auth");
-
-
+const { requireAuth, requireTeacher } = require("../middleware/auth");
 const router = express.Router();
 
 router.get("/pending", requireAuth, requireTeacher, async (request, response) => {
@@ -87,6 +80,5 @@ router.patch("/:id/reject",requireAuth,requireTeacher,async (request, response) 
     response.status(500).json({ error: "Ошибка отклонения регистрации" });
   }
 });
-
 
 module.exports = router;
