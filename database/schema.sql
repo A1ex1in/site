@@ -297,3 +297,26 @@ CREATE TABLE assignment_files (
 
 CREATE INDEX assignment_files_assignment_idx
 ON assignment_files (assignment_id);
+
+-- ------------------------------------------------------------
+-- Файлы материалов, прикреплённые к заданиям
+-- ------------------------------------------------------------
+
+CREATE TABLE assignment_material_files (
+    assignment_id BIGINT NOT NULL,
+    material_file_id BIGINT NOT NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (assignment_id, material_file_id),
+
+    CONSTRAINT fk_assignment_material_file_assignment
+        FOREIGN KEY (assignment_id)
+        REFERENCES assignments(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_assignment_material_file_file
+        FOREIGN KEY (material_file_id)
+        REFERENCES material_files(id)
+        ON DELETE CASCADE
+);

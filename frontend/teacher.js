@@ -576,6 +576,7 @@ async function loadAssignmentFiles(assignmentId, assignmentTitle) {
     assignmentFilesSection.hidden = false;
     assignmentFilesTitle.textContent = `Файлы задания: ${assignmentTitle}`;
     assignmentFilesList.innerHTML = "";
+    await loadAssignmentMaterialFiles(assignmentId);
     if (data.length === 0) {
       assignmentFilesList.textContent = "Файлы пока не загружены.";
       return;
