@@ -657,6 +657,117 @@ router.patch("/materials/:materialId/publication",requireAuth,requireTeacher,req
   }
 });
 
+// Получить задания учебного курса
+router.get("/courses/:id/assignments",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const courseId = request.params.id;
+    if (!/^\d+$/.test(courseId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор курса" });
+    }
+    const courseResult = await pool.query(`
+      SELECT id
+      FROM courses
+      WHERE id = $1
+        AND teacher_id = $2
+    `,[courseId,request.user.id]);
+    if (courseResult.rowCount === 0) {
+      return response.status(404).json({ error: "Учебный курс не найден" });
+    }
+    const result = await pool.query(`
+      SELECT
+        id,
+        course_id,
+        title,
+        description,
+        deadline,
+        max_score,
+        is_published,
+        published_at,
+        created_at,
+        updated_at
+      FROM assignments
+      WHERE course_id = $1
+      ORDER BY created_at DESC, id DESC
+    `,[courseId]);
+    response.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка получения заданий курса:", error);
+    response.status(500).json({ error: "Ошибка получения заданий курса" });
+  }
+});
+
+// Создать учебное задание
+router.post("/courses/:id/assignments",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const courseId = request.params.id;
+    const { title, description, deadline, maxScore } = request.body;
+    if (!/^\d+$/.test(courseId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор курса" });
+    }
+    const normalizedTitle = typeof title === "string" ? title.trim() : "";
+    const normalizedDescription = typeof description === "string" ? description.trim() : "";
+    if (!normalizedTitle) {
+      return response.status(400).json({ error: "Необходимо указать название задания" });
+    }
+    const normalizedMaxScore = maxScore === undefined || maxScore === "" ? 5 : Number(maxScore);
+    if (!Number.isFinite(normalizedMaxScore) || normalizedMaxScore <= 0) {
+      return response.status(400).json({ error: "Максимальный балл должен быть больше нуля" });
+    }
+    let normalizedDeadline = null;
+    if (deadline) {
+      normalizedDeadline = new Date(deadline);
+
+      if (Number.isNaN(normalizedDeadline.getTime())) {
+        return response.status(400).json({ error: "Некорректный срок выполнения задания" });
+      }
+    }
+    const courseResult = await pool.query(`
+      SELECT id
+      FROM courses
+      WHERE id = $1
+        AND teacher_id = $2
+        AND is_active = TRUE
+    `,[courseId,request.user.id]);
+    if (courseResult.rowCount === 0) {
+      return response.status(404).json({ error: "Активный учебный курс не найден" });
+    }
+    const result = await pool.query(`
+      INSERT INTO assignments (
+        course_id,
+        title,
+        description,
+        deadline,
+        max_score
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING
+        id,
+        course_id,
+        title,
+        description,
+        deadline,
+        max_score,
+        is_published,
+        published_at,
+        created_at,
+        updated_at
+    `,[
+      courseId,
+      normalizedTitle,
+      normalizedDescription || null,
+      normalizedDeadline,
+      normalizedMaxScore
+    ]);
+    response.status(201).json({
+      message: "Задание создано",
+      assignment: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Ошибка создания задания:", error);
+    response.status(500).json({ error: "Ошибка создания задания" });
+  }
+});
+
 async function requireMaterialAccess(request, response, next) {
   try {
     const materialId = request.params.materialId;

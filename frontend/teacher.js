@@ -37,6 +37,14 @@ const materialFilesTitle = document.getElementById("materialFilesTitle");
 const materialFileForm = document.getElementById("materialFileForm");
 const materialFileInput = document.getElementById("materialFileInput");
 const materialFilesList = document.getElementById("materialFilesList");
+const courseAssignmentsSection = document.getElementById("courseAssignmentsSection");
+const courseAssignmentsTitle = document.getElementById("courseAssignmentsTitle");
+const assignmentForm = document.getElementById("assignmentForm");
+const assignmentTitle = document.getElementById("assignmentTitle");
+const assignmentDescription = document.getElementById("assignmentDescription");
+const assignmentDeadline = document.getElementById("assignmentDeadline");
+const assignmentMaxScore = document.getElementById("assignmentMaxScore");
+const assignmentsList = document.getElementById("assignmentsList");
 
 let selectedMaterialId = null;
 let selectedMaterialTitle = "";
@@ -45,6 +53,8 @@ let selectedCourseName = "";
 let selectedStudentId = null;
 let selectedGroupId = null;
 let selectedStudentStatus = null;
+let selectedAssignmentCourseId = null;
+let selectedAssignmentCourseName = "";
 
 materialForm.addEventListener("submit",async (event) => {
   event.preventDefault();
@@ -320,6 +330,42 @@ materialFileForm.addEventListener("submit",async (event) => {
   }
 });
 
+assignmentForm.addEventListener("submit",async (event) => {
+  event.preventDefault();
+  if (!selectedAssignmentCourseId) {
+    message.textContent = "Сначала выберите учебный курс.";
+    return;
+  }
+  const deadline = assignmentDeadline.value ? new Date(assignmentDeadline.value).toISOString() : null;
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/courses/${selectedAssignmentCourseId}/assignments`,{
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        title: assignmentTitle.value,
+        description: assignmentDescription.value,
+        deadline,
+        maxScore: assignmentMaxScore.value
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка создания задания.";
+      return;
+    }
+    message.textContent = data.message;
+    assignmentForm.reset();
+    assignmentMaxScore.value = "5";
+    await loadAssignments(selectedAssignmentCourseId,selectedAssignmentCourseName);
+  } catch (error) {
+    console.error("Ошибка создания задания:", error);
+    message.textContent = "Не удалось создать задание.";
+  }
+});
+
 async function loadMaterials(courseId, courseName = "") {
   try {
     const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/materials`,{
@@ -415,9 +461,15 @@ async function loadCourses() {
       openButton.addEventListener("click",async () => {
         await loadMaterials(course.id, `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`);
       });
+      const assignmentsButton = document.createElement("button");
+      assignmentsButton.textContent = "Задания";
+      assignmentsButton.addEventListener("click",async () => {
+        await loadAssignments(course.id, `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`);
+      });
       container.appendChild(disciplineElement);
       container.appendChild(infoElement);
       container.appendChild(openButton);
+      container.appendChild(assignmentsButton);
       coursesList.appendChild(container);
     }
   } catch (error) {
@@ -896,6 +948,54 @@ async function changeMaterialPublication(materialId, isPublished) {
   } catch (error) {
     console.error("Ошибка изменения публикации:", error);
     message.textContent = "Не удалось изменить публикацию материала.";
+  }
+}
+
+async function loadAssignments(courseId, courseName = "") {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/assignments`,{
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка получения заданий курса.";
+      return;
+    }
+    selectedAssignmentCourseId = courseId;
+    selectedAssignmentCourseName = courseName;
+    courseAssignmentsSection.hidden = false;
+    courseAssignmentsTitle.textContent = `Задания курса: ${courseName}`;
+    assignmentsList.innerHTML = "";
+    if (data.length === 0) {
+      assignmentsList.textContent = "Задания пока не созданы.";
+      return;
+    }
+    for (const assignment of data) {
+      const container = document.createElement("div");
+      const titleElement = document.createElement("strong");
+      titleElement.textContent = assignment.title;
+      const statusElement = document.createElement("span");
+      statusElement.textContent = assignment.is_published ? " — опубликовано" : " — черновик";
+      const scoreElement = document.createElement("span");
+      scoreElement.textContent = ` — максимум: ${assignment.max_score}`;
+      const descriptionElement = document.createElement("p");
+      descriptionElement.textContent = assignment.description || "Описание отсутствует.";
+      const deadlineElement = document.createElement("p");
+      if (assignment.deadline) {
+        deadlineElement.textContent = `Срок выполнения: ${new Date(assignment.deadline).toLocaleString("ru-RU")}`;
+      } else {
+        deadlineElement.textContent = "Срок выполнения: не установлен";
+      }
+      container.appendChild(titleElement);
+      container.appendChild(statusElement);
+      container.appendChild(scoreElement);
+      container.appendChild(descriptionElement);
+      container.appendChild(deadlineElement);
+      assignmentsList.appendChild(container);
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки заданий курса:", error);
+    message.textContent = "Не удалось загрузить задания курса.";
   }
 }
 

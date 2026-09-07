@@ -93,6 +93,7 @@
         <div id="coursesList">Загрузка учебных курсов...</div>
 
     <hr>
+        <h2>Материалы курса</h2>
         <section id="courseMaterialsSection" hidden>
             <h2 id="courseMaterialsTitle">Материалы курса</h2>
             <form id="materialForm">
@@ -119,6 +120,7 @@
         </section>
 
     <hr>
+        <h2>Файлы</h2>
         <section id="materialFilesSection" hidden>
             <h3 id="materialFilesTitle">Файлы материала</h3>
             <form id="materialFileForm">
@@ -127,6 +129,33 @@
             </form>
             <div id="materialFilesList"></div>
         </section>
+
+    <hr>
+        <h2>Задания курса</h2>
+        <section id="courseAssignmentsSection" hidden>
+            <h2 id="courseAssignmentsTitle">Задания курса</h2>
+            <form id="assignmentForm">
+                <div>
+                    <label for="assignmentTitle">Название</label>
+                    <input id="assignmentTitle" type="text" required>
+                </div>
+                <div>
+                    <label for="assignmentDescription">Описание</label>
+                    <textarea id="assignmentDescription"></textarea>
+                </div>
+                <div>
+                    <label for="assignmentDeadline">Срок выполнения</label>
+                    <input id="assignmentDeadline" type="datetime-local">
+                </div>
+                <div>
+                    <label for="assignmentMaxScore">Максимальный балл</label>
+                    <input id="assignmentMaxScore" type="number" min="0.01" step="0.01" value="5" required>
+                </div>
+                <button type="submit">Создать задание</button>
+            </form>
+            <div id="assignmentsList"></div>
+        </section>
+
 
     <script src="teacher.js"></script>
 </body>

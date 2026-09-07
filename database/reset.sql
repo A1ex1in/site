@@ -19,6 +19,7 @@ TRUNCATE TABLE
     user_sessions,
     material_files,
     materials,
+    assignments,
     courses,
     student_profiles,
     disciplines,

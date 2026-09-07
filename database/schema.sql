@@ -232,3 +232,35 @@ CREATE TABLE material_files (
 
 CREATE INDEX material_files_material_idx
 ON material_files (material_id);
+
+-- ------------------------------------------------------------
+-- Учебные задания
+-- ------------------------------------------------------------
+
+CREATE TABLE assignments (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    course_id BIGINT NOT NULL,
+
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+
+    deadline TIMESTAMPTZ,
+    max_score NUMERIC(6,2) NOT NULL DEFAULT 5,
+
+    is_published BOOLEAN NOT NULL DEFAULT FALSE,
+    published_at TIMESTAMPTZ,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_assignment_course
+        FOREIGN KEY (course_id)
+        REFERENCES courses(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT assignment_max_score_check
+        CHECK (max_score > 0)
+);
+
+CREATE INDEX assignments_course_idx
+ON assignments (course_id);
