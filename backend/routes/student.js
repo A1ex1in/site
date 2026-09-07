@@ -218,5 +218,53 @@ router.get("/files/:id/download",requireAuth,requireStudent,async (request, resp
   }
 });
 
+// Получить опубликованные задания учебного курса
+router.get("/courses/:id/assignments",requireAuth,requireStudent,async (request, response) => {
+  try {
+    const courseId = request.params.id;
+    if (!/^\d+$/.test(courseId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор курса" });
+    }
+    const courseResult = await pool.query(`
+      SELECT
+        c.id,
+        c.academic_year,
+        c.semester,
+        d.name AS discipline_name,
+        d.code AS discipline_code
+      FROM courses c
+      JOIN disciplines d ON d.id = c.discipline_id
+      JOIN student_profiles sp ON sp.group_id = c.group_id
+      WHERE c.id = $1
+        AND sp.user_id = $2
+        AND c.is_active = TRUE
+        AND d.is_active = TRUE
+    `,[courseId,request.user.id]);
+    if (courseResult.rowCount === 0) {
+      return response.status(404).json({ error: "Учебный курс не найден" });
+    }
+    const assignmentsResult = await pool.query(`
+      SELECT
+        id,
+        course_id,
+        title,
+        description,
+        deadline,
+        max_score,
+        published_at
+      FROM assignments
+      WHERE course_id = $1
+        AND is_published = TRUE
+      ORDER BY deadline NULLS LAST, created_at, id
+    `,[courseId]);
+    response.json({
+      course: courseResult.rows[0],
+      assignments: assignmentsResult.rows
+    });
+  } catch (error) {
+    console.error("Ошибка получения заданий курса:", error);
+    response.status(500).json({ error: "Ошибка получения заданий курса" });
+  }
+});
 
 module.exports = router;

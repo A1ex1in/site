@@ -9,6 +9,9 @@ const materialsList = document.getElementById("materialsList");
 const materialFilesSection = document.getElementById("materialFilesSection");
 const materialFilesTitle = document.getElementById("materialFilesTitle");
 const materialFilesList = document.getElementById("materialFilesList");
+const courseAssignmentsSection = document.getElementById("courseAssignmentsSection");
+const courseAssignmentsTitle = document.getElementById("courseAssignmentsTitle");
+const assignmentsList = document.getElementById("assignmentsList");
 
 
 logoutButton.addEventListener("click",async () => {
@@ -31,41 +34,6 @@ logoutButton.addEventListener("click",async () => {
     }
   }
 );
-
-function formatFileSize(sizeBytes) {
-  const size = Number(sizeBytes);
-  if (size < 1024) return `${size} Б`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} КБ`;
-  return `${(size / (1024 * 1024)).toFixed(1)} МБ`;
-}
-
-async function checkStudentAccess() {
-  try {
-    const response = await fetch(`${apiUrl}/api/auth/me`,
-      {
-        credentials: "include"
-      }
-    );
-    if (response.status === 401) {
-      window.location.href = "login.html";
-      return false;
-    }
-    if (!response.ok) {
-      throw new Error("Ошибка проверки авторизации");
-    }
-    const data = await response.json();
-    if (data.user.role !== "student") {
-      message.textContent = "У вас нет доступа к кабинету студента.";
-      profile.textContent = "";
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.error(error);
-    message.textContent = "Не удалось проверить авторизацию.";
-    return false;
-  }
-}
 
 async function loadProfile() {
   try {
@@ -124,16 +92,22 @@ async function loadCourses() {
       ].filter(Boolean).join(" ");
       const titleElement = document.createElement("strong");
       titleElement.textContent = course.discipline_name;
+
       const infoElement = document.createElement("span");
       infoElement.textContent = ` — ${course.academic_year} — ${course.semester} семестр — ${teacherName}`;
+
       const materialsButton = document.createElement("button");
       materialsButton.textContent = "Материалы";
-      materialsButton.addEventListener("click",async () => {
-        await loadMaterials(course.id,course.discipline_name);
-      });
+      materialsButton.addEventListener("click",async () => { await loadMaterials(course.id,course.discipline_name); });
+
+      const assignmentsButton = document.createElement("button");
+      assignmentsButton.textContent = "Задания";
+      assignmentsButton.addEventListener("click",async () => { await loadAssignments(course.id,course.discipline_name); });
+
       container.appendChild(titleElement);
       container.appendChild(infoElement);
       container.appendChild(materialsButton);
+      container.appendChild(assignmentsButton);
       coursesList.appendChild(container);
     }
   } catch (error) {
@@ -219,6 +193,78 @@ async function loadMaterialFiles(materialId, materialTitle) {
   }
 }
 
+async function loadAssignments(courseId, courseName) {
+  try {
+    const response = await fetch(`${apiUrl}/api/student/courses/${courseId}/assignments`,{
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка загрузки заданий.";
+      return;
+    }
+    courseAssignmentsSection.hidden = false;
+    courseAssignmentsTitle.textContent = `Задания курса: ${courseName}`;
+    assignmentsList.innerHTML = "";
+    if (data.assignments.length === 0) {
+      assignmentsList.textContent = "Опубликованных заданий пока нет.";
+      return;
+    }
+    for (const assignment of data.assignments) {
+      const container = document.createElement("div");
+
+      const titleElement = document.createElement("strong");
+      titleElement.textContent = assignment.title;
+
+      const scoreElement = document.createElement("span");
+      scoreElement.textContent = ` — максимум: ${assignment.max_score}`;
+
+      const descriptionElement = document.createElement("p");
+      descriptionElement.textContent = assignment.description || "Описание отсутствует.";
+
+      const deadlineElement = document.createElement("p");
+      deadlineElement.textContent = assignment.deadline ? `Срок выполнения: ${new Date(assignment.deadline).toLocaleString("ru-RU")}` : "Срок выполнения: не установлен";
+
+      container.appendChild(titleElement);
+      container.appendChild(scoreElement);
+      container.appendChild(descriptionElement);
+      container.appendChild(deadlineElement);
+      assignmentsList.appendChild(container);
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки заданий:", error);
+    message.textContent = "Не удалось загрузить задания курса.";
+  }
+}
+
+async function checkStudentAccess() {
+  try {
+    const response = await fetch(`${apiUrl}/api/auth/me`,
+      {
+        credentials: "include"
+      }
+    );
+    if (response.status === 401) {
+      window.location.href = "login.html";
+      return false;
+    }
+    if (!response.ok) {
+      throw new Error("Ошибка проверки авторизации");
+    }
+    const data = await response.json();
+    if (data.user.role !== "student") {
+      message.textContent = "У вас нет доступа к кабинету студента.";
+      profile.textContent = "";
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error(error);
+    message.textContent = "Не удалось проверить авторизацию.";
+    return false;
+  }
+}
+
 async function downloadMaterialFile(fileId, fileName) {
   try {
     const response = await fetch(`${apiUrl}/api/student/files/${fileId}/download`,{
@@ -242,6 +288,13 @@ async function downloadMaterialFile(fileId, fileName) {
     console.error("Ошибка скачивания файла:", error);
     message.textContent = "Не удалось скачать файл.";
   }
+}
+
+function formatFileSize(sizeBytes) {
+  const size = Number(sizeBytes);
+  if (size < 1024) return `${size} Б`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} КБ`;
+  return `${(size / (1024 * 1024)).toFixed(1)} МБ`;
 }
 
 

@@ -17,6 +17,8 @@ BEGIN;
 
 TRUNCATE TABLE
     user_sessions,
+    assignment_material_files,
+    assignment_files,
     material_files,
     materials,
     assignments,

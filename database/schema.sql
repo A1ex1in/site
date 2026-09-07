@@ -264,3 +264,36 @@ CREATE TABLE assignments (
 
 CREATE INDEX assignments_course_idx
 ON assignments (course_id);
+
+-- ------------------------------------------------------------
+-- Файлы учебных заданий
+-- ------------------------------------------------------------
+
+CREATE TABLE assignment_files (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    assignment_id BIGINT NOT NULL,
+    uploaded_by BIGINT NOT NULL,
+
+    original_name VARCHAR(255) NOT NULL,
+    stored_name VARCHAR(255) NOT NULL UNIQUE,
+    storage_key TEXT NOT NULL UNIQUE,
+    mime_type VARCHAR(255) NOT NULL,
+    size_bytes BIGINT NOT NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_assignment_file_assignment
+        FOREIGN KEY (assignment_id)
+        REFERENCES assignments(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_assignment_file_uploader
+        FOREIGN KEY (uploaded_by)
+        REFERENCES users(id),
+
+    CONSTRAINT assignment_file_size_check
+        CHECK (size_bytes >= 0)
+);
+
+CREATE INDEX assignment_files_assignment_idx
+ON assignment_files (assignment_id);

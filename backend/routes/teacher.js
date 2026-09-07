@@ -6,6 +6,7 @@ const fs = require("fs");
 const uploadMaterialFile = require("../middleware/materialUpload");
 const path = require("path");
 const config = require("../config");
+const uploadAssignmentFile = require("../middleware/assignmentUpload");
 
 // Создать учебный материал
 router.post("/courses/:id/materials",requireAuth,requireTeacher,async (request, response) => {
@@ -768,6 +769,320 @@ router.post("/courses/:id/assignments",requireAuth,requireTeacher,async (request
   }
 });
 
+// Загрузить файл учебного задания
+router.post("/assignments/:assignmentId/files",requireAuth,requireTeacher,requireAssignmentAccess,uploadAssignmentFile,async (request, response) => {
+  try {
+    if (!request.file) {
+      return response.status(400).json({ error: "Необходимо выбрать файл" });
+    }
+    const storageKey = `assignments/${request.file.filename}`;
+    const result = await pool.query(`
+      INSERT INTO assignment_files (
+        assignment_id,
+        uploaded_by,
+        original_name,
+        stored_name,
+        storage_key,
+        mime_type,
+        size_bytes
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING
+        id,
+        assignment_id,
+        original_name,
+        mime_type,
+        size_bytes,
+        created_at
+    `,[
+      request.assignment.id,
+      request.user.id,
+      request.file.originalname,
+      request.file.filename,
+      storageKey,
+      request.file.mimetype,
+      request.file.size
+    ]);
+    response.status(201).json({
+      message: "Файл задания загружен",
+      file: result.rows[0]
+    });
+  } catch (error) {
+    if (request.file?.path) {
+      await fs.promises.unlink(request.file.path).catch(() => {});
+    }
+    console.error("Ошибка сохранения файла задания:", error);
+    response.status(500).json({ error: "Ошибка сохранения файла задания" });
+  }
+});
+
+// Получить файлы учебного задания
+router.get("/assignments/:assignmentId/files",requireAuth,requireTeacher,requireAssignmentAccess,async (request, response) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        id,
+        assignment_id,
+        original_name,
+        mime_type,
+        size_bytes,
+        created_at
+      FROM assignment_files
+      WHERE assignment_id = $1
+      ORDER BY created_at, id
+    `,[request.assignment.id]);
+    response.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка получения файлов задания:", error);
+    response.status(500).json({ error: "Ошибка получения файлов задания" });
+  }
+});
+
+// Скачать файл учебного задания
+router.get("/assignment-files/:id/download",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const fileId = request.params.id;
+    if (!/^\d+$/.test(fileId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор файла" });
+    }
+    const result = await pool.query(`
+      SELECT
+        af.id,
+        af.original_name,
+        af.storage_key
+      FROM assignment_files af
+      JOIN assignments a ON a.id = af.assignment_id
+      JOIN courses c ON c.id = a.course_id
+      WHERE af.id = $1
+        AND c.teacher_id = $2
+    `,[fileId,request.user.id]);
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: "Файл не найден" });
+    }
+    const file = result.rows[0];
+    const filePath = path.resolve(config.storageRoot,file.storage_key);
+    const relativePath = path.relative(config.storageRoot,filePath);
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+      console.error("Некорректный путь файла:", file.storage_key);
+      return response.status(500).json({ error: "Ошибка доступа к файлу" });
+    }
+    try {
+      await fs.promises.access(filePath,fs.constants.R_OK);
+    } catch {
+      return response.status(404).json({ error: "Файл отсутствует в хранилище" });
+    }
+    response.download(filePath,file.original_name,(error) => {
+      if (!error) return;
+      console.error("Ошибка скачивания файла задания:", error);
+      if (!response.headersSent) {
+        response.status(500).json({ error: "Ошибка скачивания файла" });
+      }
+    });
+  } catch (error) {
+    console.error("Ошибка получения файла задания:", error);
+    response.status(500).json({ error: "Ошибка получения файла" });
+  }
+});
+
+// Удалить файл учебного задания
+router.delete("/assignment-files/:id",requireAuth,requireTeacher,async (request, response) => {
+  let client;
+  try {
+    const fileId = request.params.id;
+    if (!/^\d+$/.test(fileId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор файла" });
+    }
+    client = await pool.connect();
+    await client.query("BEGIN");
+    const result = await client.query(`
+      SELECT
+        af.id,
+        af.original_name,
+        af.storage_key
+      FROM assignment_files af
+      JOIN assignments a ON a.id = af.assignment_id
+      JOIN courses c ON c.id = a.course_id
+      WHERE af.id = $1
+        AND c.teacher_id = $2
+      FOR UPDATE OF af
+    `,[fileId,request.user.id]);
+    if (result.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return response.status(404).json({ error: "Файл не найден" });
+    }
+    const file = result.rows[0];
+    const filePath = path.resolve(config.storageRoot,file.storage_key);
+    const relativePath = path.relative(config.storageRoot,filePath);
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+      await client.query("ROLLBACK");
+      console.error("Некорректный путь файла:", file.storage_key);
+      return response.status(500).json({ error: "Ошибка доступа к файлу" });
+    }
+    await client.query(`
+      DELETE FROM assignment_files
+      WHERE id = $1
+    `,[fileId]);
+    try {
+      await fs.promises.unlink(filePath);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    await client.query("COMMIT");
+    response.json({ message: "Файл задания удалён" });
+  } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(() => {});
+    console.error("Ошибка удаления файла задания:", error);
+    response.status(500).json({ error: "Ошибка удаления файла задания" });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+// Обновить состояние публикации учебного задания
+router.patch("/assignments/:assignmentId/publication",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const assignmentId = request.params.assignmentId;
+    const { isPublished } = request.body;
+    if (!/^\d+$/.test(assignmentId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор задания" });
+    }
+    if (typeof isPublished !== "boolean") {
+      return response.status(400).json({ error: "Некорректное состояние публикации" });
+    }
+    const assignmentResult = await pool.query(`
+      SELECT a.id
+      FROM assignments a
+      JOIN courses c ON c.id = a.course_id
+      WHERE a.id = $1
+        AND c.teacher_id = $2
+    `,[assignmentId,request.user.id]);
+    if (assignmentResult.rowCount === 0) {
+      return response.status(404).json({ error: "Задание не найдено" });
+    }
+    const result = await pool.query(`
+      UPDATE assignments
+      SET
+        is_published = $1,
+        published_at = CASE
+          WHEN $1 = TRUE THEN CURRENT_TIMESTAMP
+          ELSE NULL
+        END,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING
+        id,
+        course_id,
+        title,
+        description,
+        deadline,
+        max_score,
+        is_published,
+        published_at,
+        created_at,
+        updated_at
+    `,[isPublished,assignmentId]);
+    response.json({
+      message: isPublished ? "Задание опубликовано" : "Задание снято с публикации",
+      assignment: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Ошибка изменения публикации задания:", error);
+    response.status(500).json({ error: "Ошибка изменения публикации задания" });
+  }
+});
+
+// Получить файлы материалов курса для задания
+router.get("/assignments/:assignmentId/material-files",requireAuth,requireTeacher,requireAssignmentAccess,async (request, response) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        mf.id,
+        mf.original_name,
+        mf.mime_type,
+        mf.size_bytes,
+        m.id AS material_id,
+        m.title AS material_title,
+        EXISTS (
+          SELECT 1
+          FROM assignment_material_files amf
+          WHERE amf.assignment_id = $1
+            AND amf.material_file_id = mf.id
+        ) AS is_attached
+      FROM material_files mf
+      JOIN materials m ON m.id = mf.material_id
+      WHERE m.course_id = $2
+      ORDER BY m.title, mf.created_at, mf.id
+    `,[request.assignment.id,request.assignment.course_id]);
+    response.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка получения файлов материалов курса:", error);
+    response.status(500).json({ error: "Ошибка получения файлов материалов курса" });
+  }
+});
+
+// Прикрепить файл материала к заданию
+router.post("/assignments/:assignmentId/material-files/:materialFileId",requireAuth,requireTeacher,requireAssignmentAccess,async (request, response) => {
+  try {
+    const materialFileId = request.params.materialFileId;
+    if (!/^\d+$/.test(materialFileId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор файла" });
+    }
+    const fileResult = await pool.query(`
+      SELECT mf.id
+      FROM material_files mf
+      JOIN materials m ON m.id = mf.material_id
+      WHERE mf.id = $1
+        AND m.course_id = $2
+    `,[materialFileId,request.assignment.course_id]);
+    if (fileResult.rowCount === 0) {
+      return response.status(404).json({ error: "Файл материала не найден в этом курсе" });
+    }
+    const result = await pool.query(`
+      INSERT INTO assignment_material_files (
+        assignment_id,
+        material_file_id
+      )
+      VALUES ($1, $2)
+      ON CONFLICT (assignment_id, material_file_id)
+      DO NOTHING
+      RETURNING assignment_id, material_file_id, created_at
+    `,[request.assignment.id,materialFileId]);
+    if (result.rowCount === 0) {
+      return response.json({ message: "Файл уже прикреплён к заданию" });
+    }
+    response.status(201).json({
+      message: "Файл материала прикреплён к заданию",
+      file: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Ошибка прикрепления файла материала:", error);
+    response.status(500).json({ error: "Ошибка прикрепления файла материала" });
+  }
+});
+
+// Убрать файл материала из задания
+router.delete("/assignments/:assignmentId/material-files/:materialFileId",requireAuth,requireTeacher,requireAssignmentAccess,async (request, response) => {
+  try {
+    const materialFileId = request.params.materialFileId;
+    if (!/^\d+$/.test(materialFileId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор файла" });
+    }
+    const result = await pool.query(`
+      DELETE FROM assignment_material_files
+      WHERE assignment_id = $1
+        AND material_file_id = $2
+      RETURNING assignment_id, material_file_id
+    `,[request.assignment.id,materialFileId]);
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: "Файл не прикреплён к заданию" });
+    }
+    response.json({ message: "Файл материала убран из задания" });
+  } catch (error) {
+    console.error("Ошибка удаления связи файла материала:", error);
+    response.status(500).json({ error: "Ошибка удаления файла из задания" });
+  }
+});
+
 async function requireMaterialAccess(request, response, next) {
   try {
     const materialId = request.params.materialId;
@@ -789,6 +1104,33 @@ async function requireMaterialAccess(request, response, next) {
   } catch (error) {
     console.error("Ошибка проверки доступа к материалу:", error);
     response.status(500).json({ error: "Ошибка проверки доступа к материалу" });
+  }
+}
+
+async function requireAssignmentAccess(request, response, next) {
+  try {
+    const assignmentId = request.params.assignmentId;
+    if (!/^\d+$/.test(assignmentId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор задания" });
+    }
+    const result = await pool.query(`
+      SELECT
+        a.id,
+        a.course_id,
+        a.title
+      FROM assignments a
+      JOIN courses c ON c.id = a.course_id
+      WHERE a.id = $1
+        AND c.teacher_id = $2
+    `,[assignmentId,request.user.id]);
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: "Задание не найдено" });
+    }
+    request.assignment = result.rows[0];
+    next();
+  } catch (error) {
+    console.error("Ошибка проверки доступа к заданию:", error);
+    response.status(500).json({ error: "Ошибка проверки доступа к заданию" });
   }
 }
 
