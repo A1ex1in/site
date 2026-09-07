@@ -12,6 +12,9 @@ const materialFilesList = document.getElementById("materialFilesList");
 const courseAssignmentsSection = document.getElementById("courseAssignmentsSection");
 const courseAssignmentsTitle = document.getElementById("courseAssignmentsTitle");
 const assignmentsList = document.getElementById("assignmentsList");
+const assignmentFilesSection = document.getElementById("assignmentFilesSection");
+const assignmentFilesTitle = document.getElementById("assignmentFilesTitle");
+const assignmentFilesList = document.getElementById("assignmentFilesList");
 
 
 logoutButton.addEventListener("click",async () => {
@@ -157,6 +160,56 @@ async function loadMaterials(courseId, courseName) {
   }
 }
 
+async function loadAssignments(courseId, courseName) {
+  try {
+    const response = await fetch(`${apiUrl}/api/student/courses/${courseId}/assignments`,{
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка загрузки заданий.";
+      return;
+    }
+    courseAssignmentsSection.hidden = false;
+    courseAssignmentsTitle.textContent = `Задания курса: ${courseName}`;
+    assignmentsList.innerHTML = "";
+    assignmentFilesSection.hidden = true;
+    if (data.assignments.length === 0) {
+      assignmentsList.textContent = "Опубликованных заданий пока нет.";
+      return;
+    }
+    for (const assignment of data.assignments) {
+      const container = document.createElement("div");
+
+      const titleElement = document.createElement("strong");
+      titleElement.textContent = assignment.title;
+
+      const scoreElement = document.createElement("span");
+      scoreElement.textContent = ` — максимум: ${assignment.max_score}`;
+
+      const descriptionElement = document.createElement("p");
+      descriptionElement.textContent = assignment.description || "Описание отсутствует.";
+
+      const deadlineElement = document.createElement("p");
+      deadlineElement.textContent = assignment.deadline ? `Срок выполнения: ${new Date(assignment.deadline).toLocaleString("ru-RU")}` : "Срок выполнения: не установлен";
+
+      const filesButton = document.createElement("button");
+      filesButton.textContent = "Файлы";
+      filesButton.addEventListener("click",async () => { await loadAssignmentFiles(assignment.id,assignment.title); });
+
+      container.appendChild(titleElement);
+      container.appendChild(scoreElement);
+      container.appendChild(descriptionElement);
+      container.appendChild(deadlineElement);
+      container.appendChild(filesButton);
+      assignmentsList.appendChild(container);
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки заданий:", error);
+    message.textContent = "Не удалось загрузить задания курса.";
+  }
+}
+
 async function loadMaterialFiles(materialId, materialTitle) {
   try {
     const response = await fetch(`${apiUrl}/api/student/materials/${materialId}/files`,{
@@ -193,47 +246,42 @@ async function loadMaterialFiles(materialId, materialTitle) {
   }
 }
 
-async function loadAssignments(courseId, courseName) {
+async function loadAssignmentFiles(assignmentId, assignmentTitle) {
   try {
-    const response = await fetch(`${apiUrl}/api/student/courses/${courseId}/assignments`,{
+    const response = await fetch(`${apiUrl}/api/student/assignments/${assignmentId}/files`,{
       credentials: "include"
     });
     const data = await response.json();
     if (!response.ok) {
-      message.textContent = data.error || "Ошибка загрузки заданий.";
+      message.textContent = data.error || "Ошибка получения файлов задания.";
       return;
     }
-    courseAssignmentsSection.hidden = false;
-    courseAssignmentsTitle.textContent = `Задания курса: ${courseName}`;
-    assignmentsList.innerHTML = "";
-    if (data.assignments.length === 0) {
-      assignmentsList.textContent = "Опубликованных заданий пока нет.";
+    assignmentFilesSection.hidden = false;
+    assignmentFilesTitle.textContent = `Файлы задания: ${assignmentTitle}`;
+    assignmentFilesList.innerHTML = "";
+    if (data.length === 0) {
+      assignmentFilesList.textContent = "Файлы к заданию не прикреплены.";
       return;
     }
-    for (const assignment of data.assignments) {
+    for (const file of data) {
       const container = document.createElement("div");
-
-      const titleElement = document.createElement("strong");
-      titleElement.textContent = assignment.title;
-
-      const scoreElement = document.createElement("span");
-      scoreElement.textContent = ` — максимум: ${assignment.max_score}`;
-
-      const descriptionElement = document.createElement("p");
-      descriptionElement.textContent = assignment.description || "Описание отсутствует.";
-
-      const deadlineElement = document.createElement("p");
-      deadlineElement.textContent = assignment.deadline ? `Срок выполнения: ${new Date(assignment.deadline).toLocaleString("ru-RU")}` : "Срок выполнения: не установлен";
-
-      container.appendChild(titleElement);
-      container.appendChild(scoreElement);
-      container.appendChild(descriptionElement);
-      container.appendChild(deadlineElement);
-      assignmentsList.appendChild(container);
+      const downloadButton = document.createElement("button");
+      downloadButton.textContent = file.original_name;
+      downloadButton.addEventListener("click",async () => {
+        await downloadAssignmentFile(assignmentId,file);
+      });
+      const infoElement = document.createElement("span");
+      infoElement.textContent = ` — ${formatFileSize(file.size_bytes)}`;
+      if (file.source === "material" && file.material_title) {
+        infoElement.textContent += ` — из материала: ${file.material_title}`;
+      }
+      container.appendChild(downloadButton);
+      container.appendChild(infoElement);
+      assignmentFilesList.appendChild(container);
     }
   } catch (error) {
-    console.error("Ошибка загрузки заданий:", error);
-    message.textContent = "Не удалось загрузить задания курса.";
+    console.error("Ошибка загрузки файлов задания:", error);
+    message.textContent = "Не удалось загрузить файлы задания.";
   }
 }
 
@@ -286,6 +334,31 @@ async function downloadMaterialFile(fileId, fileName) {
     URL.revokeObjectURL(url);
   } catch (error) {
     console.error("Ошибка скачивания файла:", error);
+    message.textContent = "Не удалось скачать файл.";
+  }
+}
+
+async function downloadAssignmentFile(assignmentId, file) {
+  try {
+    const response = await fetch(`${apiUrl}/api/student/assignments/${assignmentId}/files/${file.source}/${file.id}/download`,{
+      credentials: "include"
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      message.textContent = data.error || "Ошибка скачивания файла.";
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.original_name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Ошибка скачивания файла задания:", error);
     message.textContent = "Не удалось скачать файл.";
   }
 }

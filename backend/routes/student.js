@@ -267,4 +267,119 @@ router.get("/courses/:id/assignments",requireAuth,requireStudent,async (request,
   }
 });
 
+// Получаем все файлы задания
+router.get("/assignments/:assignmentId/files",requireAuth,requireStudent,requireStudentAssignmentAccess,async (request, response) => {
+  try {
+    const result = await pool.query(`
+      SELECT af.id, af.original_name, af.mime_type, af.size_bytes, af.created_at, 'assignment' AS source, NULL::VARCHAR AS material_title
+      FROM assignment_files af
+      WHERE af.assignment_id = $1
+      UNION ALL
+      SELECT mf.id, mf.original_name, mf.mime_type, mf.size_bytes, amf.created_at, 'material' AS source, m.title AS material_title
+      FROM assignment_material_files amf
+      JOIN material_files mf ON mf.id = amf.material_file_id
+      JOIN materials m ON m.id = mf.material_id
+      WHERE amf.assignment_id = $1
+        AND m.course_id = $2
+      ORDER BY created_at, id
+    `,[request.assignment.id,request.assignment.course_id]);
+    response.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка получения файлов задания:", error);
+    response.status(500).json({ error: "Ошибка получения файлов задания" });
+  }
+});
+
+// Защищённое скачивание
+router.get("/assignments/:assignmentId/files/:source/:fileId/download",requireAuth,requireStudent,requireStudentAssignmentAccess,async (request, response) => {
+  try {
+    const { source, fileId } = request.params;
+    if (!/^\d+$/.test(fileId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор файла" });
+    }
+    let result;
+    if (source === "assignment") {
+      result = await pool.query(`
+        SELECT
+          original_name,
+          storage_key
+        FROM assignment_files
+        WHERE id = $1
+          AND assignment_id = $2
+      `,[fileId,request.assignment.id]);
+    } else if (source === "material") {
+      result = await pool.query(`
+        SELECT
+          mf.original_name,
+          mf.storage_key
+        FROM assignment_material_files amf
+        JOIN material_files mf ON mf.id = amf.material_file_id
+        JOIN materials m ON m.id = mf.material_id
+        WHERE amf.assignment_id = $1
+          AND mf.id = $2
+          AND m.course_id = $3
+      `,[request.assignment.id,fileId,request.assignment.course_id]);
+    } else {
+      return response.status(400).json({ error: "Некорректный источник файла" });
+    }
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: "Файл не найден" });
+    }
+    const file = result.rows[0];
+    const filePath = path.resolve(config.storageRoot,file.storage_key);
+    const relativePath = path.relative(config.storageRoot,filePath);
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+      console.error("Некорректный путь файла:", file.storage_key);
+      return response.status(500).json({ error: "Ошибка доступа к файлу" });
+    }
+    try {
+      await fs.promises.access(filePath,fs.constants.R_OK);
+    } catch {
+      return response.status(404).json({ error: "Файл отсутствует в хранилище" });
+    }
+    response.download(filePath,file.original_name,(error) => {
+      if (!error) return;
+      console.error("Ошибка скачивания файла задания:", error);
+      if (!response.headersSent) {
+        response.status(500).json({ error: "Ошибка скачивания файла" });
+      }
+    });
+  } catch (error) {
+    console.error("Ошибка получения файла задания:", error);
+    response.status(500).json({ error: "Ошибка получения файла" });
+  }
+});
+
+async function requireStudentAssignmentAccess(request, response, next) {
+  try {
+    const assignmentId = request.params.assignmentId;
+    if (!/^\d+$/.test(assignmentId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор задания" });
+    }
+    const result = await pool.query(`
+      SELECT
+        a.id,
+        a.course_id,
+        a.title
+      FROM assignments a
+      JOIN courses c ON c.id = a.course_id
+      JOIN disciplines d ON d.id = c.discipline_id
+      JOIN student_profiles sp ON sp.group_id = c.group_id
+      WHERE a.id = $1
+        AND sp.user_id = $2
+        AND a.is_published = TRUE
+        AND c.is_active = TRUE
+        AND d.is_active = TRUE
+    `,[assignmentId,request.user.id]);
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: "Задание не найдено" });
+    }
+    request.assignment = result.rows[0];
+    next();
+  } catch (error) {
+    console.error("Ошибка проверки доступа к заданию:", error);
+    response.status(500).json({ error: "Ошибка проверки доступа к заданию" });
+  }
+}
+
 module.exports = router;
