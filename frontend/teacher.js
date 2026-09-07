@@ -46,6 +46,8 @@ const assignmentDeadline = document.getElementById("assignmentDeadline");
 const assignmentMaxScore = document.getElementById("assignmentMaxScore");
 const assignmentsList = document.getElementById("assignmentsList");
 
+
+
 let selectedMaterialId = null;
 let selectedMaterialTitle = "";
 let selectedCourseId = null;
@@ -452,20 +454,21 @@ async function loadCourses() {
     }
     for (const course of data) {
       const container = document.createElement("div");
+
       const disciplineElement = document.createElement("strong");
       disciplineElement.textContent = course.discipline_name;
+
       const infoElement = document.createElement("span");
       infoElement.textContent = ` — ${course.group_name}` + ` — ${course.academic_year}` + ` — ${course.semester} семестр`;
+
       const openButton = document.createElement("button");
       openButton.textContent = "Материалы";
-      openButton.addEventListener("click",async () => {
-        await loadMaterials(course.id, `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`);
-      });
+      openButton.addEventListener("click",async () => { await loadMaterials(course.id, `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`); });
+
       const assignmentsButton = document.createElement("button");
       assignmentsButton.textContent = "Задания";
-      assignmentsButton.addEventListener("click",async () => {
-        await loadAssignments(course.id, `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`);
-      });
+      assignmentsButton.addEventListener("click",async () => { await loadAssignments(course.id, `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`); });
+
       container.appendChild(disciplineElement);
       container.appendChild(infoElement);
       container.appendChild(openButton);
@@ -475,6 +478,56 @@ async function loadCourses() {
   } catch (error) {
     console.error("Ошибка загрузки учебных курсов:", error);
     message.textContent = "Не удалось загрузить учебные курсы.";
+  }
+}
+
+async function loadAssignments(courseId, courseName = "") {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/assignments`,{
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка получения заданий курса.";
+      return;
+    }
+    selectedAssignmentCourseId = courseId;
+    selectedAssignmentCourseName = courseName;
+    courseAssignmentsSection.hidden = false;
+    courseAssignmentsTitle.textContent = `Задания курса: ${courseName}`;
+    assignmentsList.innerHTML = "";
+    if (data.length === 0) {
+      assignmentsList.textContent = "Задания пока не созданы.";
+      return;
+    }
+    for (const assignment of data) {
+      const container = document.createElement("div");
+
+      const titleElement = document.createElement("strong");
+      titleElement.textContent = assignment.title;
+
+      const statusElement = document.createElement("span");
+      statusElement.textContent = assignment.is_published ? " — опубликовано" : " — черновик";
+
+      const scoreElement = document.createElement("span");
+      scoreElement.textContent = ` — максимум: ${assignment.max_score}`;
+
+      const descriptionElement = document.createElement("p");
+      descriptionElement.textContent = assignment.description || "Описание отсутствует.";
+
+      const deadlineElement = document.createElement("p");
+      deadlineElement.textContent = assignment.deadline ? `Срок выполнения: ${new Date(assignment.deadline).toLocaleString("ru-RU")}` : "Срок выполнения: не установлен";
+
+      container.appendChild(titleElement);
+      container.appendChild(statusElement);
+      container.appendChild(scoreElement);
+      container.appendChild(descriptionElement);
+      container.appendChild(deadlineElement);
+      assignmentsList.appendChild(container);
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки заданий курса:", error);
+    message.textContent = "Не удалось загрузить задания курса.";
   }
 }
 
@@ -923,80 +976,6 @@ function formatFileSize(sizeBytes) {
   if (size < 1024) return `${size} Б`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} КБ`;
   return `${(size / (1024 * 1024)).toFixed(1)} МБ`;
-}
-
-async function changeMaterialPublication(materialId, isPublished) {
-  try {
-    const response = await fetch(`${apiUrl}/api/teacher/materials/${materialId}/publication`,{
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      credentials: "include",
-      body: JSON.stringify({ isPublished })
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      message.textContent = data.error || "Ошибка изменения публикации.";
-      return;
-    }
-    message.textContent = data.message;
-    await loadMaterials(
-      selectedCourseId,
-      courseMaterialsTitle.textContent.replace("Материалы курса: ", "")
-    );
-  } catch (error) {
-    console.error("Ошибка изменения публикации:", error);
-    message.textContent = "Не удалось изменить публикацию материала.";
-  }
-}
-
-async function loadAssignments(courseId, courseName = "") {
-  try {
-    const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/assignments`,{
-      credentials: "include"
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      message.textContent = data.error || "Ошибка получения заданий курса.";
-      return;
-    }
-    selectedAssignmentCourseId = courseId;
-    selectedAssignmentCourseName = courseName;
-    courseAssignmentsSection.hidden = false;
-    courseAssignmentsTitle.textContent = `Задания курса: ${courseName}`;
-    assignmentsList.innerHTML = "";
-    if (data.length === 0) {
-      assignmentsList.textContent = "Задания пока не созданы.";
-      return;
-    }
-    for (const assignment of data) {
-      const container = document.createElement("div");
-      const titleElement = document.createElement("strong");
-      titleElement.textContent = assignment.title;
-      const statusElement = document.createElement("span");
-      statusElement.textContent = assignment.is_published ? " — опубликовано" : " — черновик";
-      const scoreElement = document.createElement("span");
-      scoreElement.textContent = ` — максимум: ${assignment.max_score}`;
-      const descriptionElement = document.createElement("p");
-      descriptionElement.textContent = assignment.description || "Описание отсутствует.";
-      const deadlineElement = document.createElement("p");
-      if (assignment.deadline) {
-        deadlineElement.textContent = `Срок выполнения: ${new Date(assignment.deadline).toLocaleString("ru-RU")}`;
-      } else {
-        deadlineElement.textContent = "Срок выполнения: не установлен";
-      }
-      container.appendChild(titleElement);
-      container.appendChild(statusElement);
-      container.appendChild(scoreElement);
-      container.appendChild(descriptionElement);
-      container.appendChild(deadlineElement);
-      assignmentsList.appendChild(container);
-    }
-  } catch (error) {
-    console.error("Ошибка загрузки заданий курса:", error);
-    message.textContent = "Не удалось загрузить задания курса.";
-  }
 }
 
 async function init() {
