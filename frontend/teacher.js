@@ -425,6 +425,74 @@ assignmentFileForm.addEventListener("submit",async (event) => {
   }
 });
 
+returnSubmissionButton.addEventListener("click",async () => {
+  if (!selectedSubmissionId) return;
+  const teacherComment = teacherSubmissionComment.value.trim();
+  if (!teacherComment) {
+    message.textContent = "Укажите причину возврата работы.";
+    return;
+  }
+  const confirmed = confirm("Вернуть работу студенту на доработку?");
+  if (!confirmed) return;
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/submissions/${selectedSubmissionId}/return`,{
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      credentials: "include",
+      body: JSON.stringify({ teacherComment })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка возврата работы.";
+      return;
+    }
+    message.textContent = data.message;
+    submissionDetailsSection.hidden = true;
+  } catch (error) {
+    console.error("Ошибка возврата работы:", error);
+    message.textContent = "Не удалось вернуть работу.";
+  }
+});
+
+gradeSubmissionButton.addEventListener("click",async () => {
+  if (!selectedSubmissionId) return;
+  const score = Number(submissionScoreInput.value);
+  if (!Number.isFinite(score) || score < 0) {
+    message.textContent = "Укажите корректный балл.";
+    return;
+  }
+  if (score > selectedSubmissionMaxScore) {
+    message.textContent = `Балл не может превышать ${selectedSubmissionMaxScore}.`;
+    return;
+  }
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/submissions/${selectedSubmissionId}/grade`,{
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        score,
+        teacherComment: teacherSubmissionComment.value
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка оценивания работы.";
+      return;
+    }
+    message.textContent = data.message;
+    submissionStatus.textContent = "Статус: Проверено";
+    returnSubmissionButton.hidden = true;
+  } catch (error) {
+    console.error("Ошибка оценивания работы:", error);
+    message.textContent = "Не удалось оценить работу.";
+  }
+});
+
 async function loadMaterials(courseId, courseName = "") {
   try {
     const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/materials`,{
@@ -1054,6 +1122,38 @@ async function loadSubmissions(assignmentId, assignmentTitle) {
   }
 }
 
+async function loadTeacherSubmissionFiles(submissionId) {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/submissions/${submissionId}/files`,{
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка получения файлов работы.";
+      return;
+    }
+    submissionFilesList.innerHTML = "";
+    if (data.length === 0) {
+      submissionFilesList.textContent = "Файлы к работе не приложены.";
+      return;
+    }
+    for (const file of data) {
+      const container = document.createElement("div");
+      const downloadButton = document.createElement("button");
+      downloadButton.textContent = file.original_name;
+      downloadButton.addEventListener("click",async () => { await downloadTeacherSubmissionFile(file.id,file.original_name); });
+      const infoElement = document.createElement("span");
+      infoElement.textContent = ` — ${formatFileSize(file.size_bytes)} — ${file.mime_type}`;
+      container.appendChild(downloadButton);
+      container.appendChild(infoElement);
+      submissionFilesList.appendChild(container);
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки файлов работы:", error);
+    message.textContent = "Не удалось загрузить файлы работы.";
+  }
+}
+
 async function downloadAssignmentFile(fileId, fileName) {
   try {
     const response = await fetch(`${apiUrl}/api/teacher/assignment-files/${fileId}/download`,{
@@ -1101,6 +1201,31 @@ async function downloadMaterialFile(fileId, fileName) {
   } catch (error) {
     console.error("Ошибка скачивания файла:", error);
     message.textContent = "Не удалось скачать файл.";
+  }
+}
+
+async function downloadTeacherSubmissionFile(fileId, fileName) {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/submission-files/${fileId}/download`,{
+      credentials: "include"
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      message.textContent = data.error || "Ошибка скачивания файла.";
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Ошибка скачивания файла работы:", error);
+    message.textContent = "Не удалось скачать файл работы.";
   }
 }
 
