@@ -1275,6 +1275,107 @@ router.patch("/submissions/:submissionId/grade",requireAuth,requireTeacher,requi
   }
 });
 
+// Получить электронный журнал учебного курса
+router.get("/courses/:id/journal",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const courseId = request.params.id;
+    if (!/^\d+$/.test(courseId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор курса" });
+    }
+    const courseResult = await pool.query(`
+      SELECT
+        c.id,
+        c.academic_year,
+        c.semester,
+        d.name AS discipline_name,
+        d.code AS discipline_code,
+        g.id AS group_id,
+        g.name AS group_name
+      FROM courses c
+      JOIN disciplines d ON d.id = c.discipline_id
+      JOIN student_groups g ON g.id = c.group_id
+      WHERE c.id = $1
+        AND c.teacher_id = $2
+    `,[courseId,request.user.id]);
+    if (courseResult.rowCount === 0) {
+      return response.status(404).json({ error: "Учебный курс не найден" });
+    }
+    const course = courseResult.rows[0];
+    const assignmentsResult = await pool.query(`
+      SELECT
+        id,
+        title,
+        deadline,
+        max_score,
+        is_published
+      FROM assignments
+      WHERE course_id = $1
+      ORDER BY created_at, id
+    `,[courseId]);
+    const studentsResult = await pool.query(`
+      SELECT
+        u.id,
+        u.last_name,
+        u.first_name,
+        u.middle_name,
+        u.status,
+        sp.student_number
+      FROM student_profiles sp
+      JOIN users u ON u.id = sp.user_id
+      WHERE sp.group_id = $1
+        AND u.role = 'student'
+        AND u.status IN ('active','blocked')
+      ORDER BY u.last_name, u.first_name, u.middle_name
+    `,[course.group_id]);
+    const submissionsResult = await pool.query(`
+      SELECT
+        ss.id,
+        ss.assignment_id,
+        ss.student_id,
+        ss.status,
+        ss.score,
+        ss.submitted_at,
+        ss.checked_at,
+        CASE
+          WHEN a.deadline IS NOT NULL
+            AND ss.submitted_at IS NOT NULL
+            AND ss.submitted_at > a.deadline
+          THEN TRUE
+          ELSE FALSE
+        END AS is_late
+      FROM student_submissions ss
+      JOIN assignments a ON a.id = ss.assignment_id
+      WHERE a.course_id = $1
+    `,[courseId]);
+    const submissionsByStudent = {};
+    for (const submission of submissionsResult.rows) {
+      if (!submissionsByStudent[submission.student_id]) {
+        submissionsByStudent[submission.student_id] = {};
+      }
+      submissionsByStudent[submission.student_id][submission.assignment_id] = {
+        id: submission.id,
+        status: submission.status,
+        score: submission.score,
+        submitted_at: submission.submitted_at,
+        checked_at: submission.checked_at,
+        is_late: submission.is_late
+      };
+    }
+    const students = studentsResult.rows.map(student => ({
+      ...student,
+      submissions: submissionsByStudent[student.id] || {}
+    }));
+    response.json({
+      course,
+      assignments: assignmentsResult.rows,
+      students
+    });
+  } catch (error) {
+    console.error("Ошибка получения электронного журнала:", error);
+    response.status(500).json({ error: "Ошибка получения электронного журнала" });
+  }
+});
+
 async function requireMaterialAccess(request, response, next) {
   try {
     const materialId = request.params.materialId;
