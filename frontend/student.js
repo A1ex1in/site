@@ -15,7 +15,26 @@ const assignmentsList = document.getElementById("assignmentsList");
 const assignmentFilesSection = document.getElementById("assignmentFilesSection");
 const assignmentFilesTitle = document.getElementById("assignmentFilesTitle");
 const assignmentFilesList = document.getElementById("assignmentFilesList");
+const submissionSection = document.getElementById("submissionSection");
+const submissionTitle = document.getElementById("submissionTitle");
+const submissionStatus = document.getElementById("submissionStatus");
+const submissionSubmittedAt = document.getElementById("submissionSubmittedAt");
+const submissionForm = document.getElementById("submissionForm");
+const submissionComment = document.getElementById("submissionComment");
+const saveSubmissionButton = document.getElementById("saveSubmissionButton");
+const submissionFeedback = document.getElementById("submissionFeedback");
+const submissionScore = document.getElementById("submissionScore");
+const submissionTeacherComment = document.getElementById("submissionTeacherComment");
+const submissionCheckedAt = document.getElementById("submissionCheckedAt");
+const submissionFileForm = document.getElementById("submissionFileForm");
+const submissionFileInput = document.getElementById("submissionFileInput");
+const uploadSubmissionFileButton = document.getElementById("uploadSubmissionFileButton");
+const submissionFilesList = document.getElementById("submissionFilesList");
+const submitSubmissionButton = document.getElementById("submitSubmissionButton");
 
+let selectedSubmissionAssignmentId = null;
+let selectedSubmissionAssignmentTitle = "";
+let currentSubmission = null;
 
 logoutButton.addEventListener("click",async () => {
     try {
@@ -37,6 +56,98 @@ logoutButton.addEventListener("click",async () => {
     }
   }
 );
+
+submissionForm.addEventListener("submit",async (event) => {
+  event.preventDefault();
+  if (!selectedSubmissionAssignmentId) {
+    message.textContent = "Сначала выберите задание.";
+    return;
+  }
+  try {
+    const response = await fetch(`${apiUrl}/api/student/assignments/${selectedSubmissionAssignmentId}/submission`,{
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        studentComment: submissionComment.value
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка сохранения работы.";
+      return;
+    }
+    message.textContent = data.message;
+    currentSubmission = data.submission;
+    renderSubmission();
+    await loadSubmissionFiles();
+  } catch (error) {
+    console.error("Ошибка сохранения работы:", error);
+    message.textContent = "Не удалось сохранить работу.";
+  }
+});
+
+submissionFileForm.addEventListener("submit",async (event) => {
+  event.preventDefault();
+  if (!selectedSubmissionAssignmentId || !currentSubmission) {
+    message.textContent = "Сначала сохраните черновик работы.";
+    return;
+  }
+  const file = submissionFileInput.files[0];
+  if (!file) {
+    message.textContent = "Выберите файл.";
+    return;
+  }
+  const formData = new FormData();
+  formData.append("file",file);
+  try {
+    const response = await fetch(`${apiUrl}/api/student/assignments/${selectedSubmissionAssignmentId}/submission/files`,{
+      method: "POST",
+      credentials: "include",
+      body: formData
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка загрузки файла работы.";
+      return;
+    }
+    message.textContent = data.message;
+    submissionFileForm.reset();
+    await loadSubmissionFiles();
+  } catch (error) {
+    console.error("Ошибка загрузки файла работы:", error);
+    message.textContent = "Не удалось загрузить файл работы.";
+  }
+});
+
+submitSubmissionButton.addEventListener("click",async () => {
+  if (!selectedSubmissionAssignmentId || !currentSubmission) {
+    message.textContent = "Сначала сохраните работу.";
+    return;
+  }
+  const confirmed = confirm("Отправить работу преподавателю? После отправки изменить её будет нельзя.");
+  if (!confirmed) return;
+  try {
+    const response = await fetch(`${apiUrl}/api/student/assignments/${selectedSubmissionAssignmentId}/submission/submit`,{
+      method: "POST",
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка отправки работы.";
+      return;
+    }
+    message.textContent = data.message;
+    currentSubmission = data.submission;
+    renderSubmission();
+    await loadSubmissionFiles();
+  } catch (error) {
+    console.error("Ошибка отправки работы:", error);
+    message.textContent = "Не удалось отправить работу.";
+  }
+});
 
 async function loadProfile() {
   try {
@@ -170,10 +281,16 @@ async function loadAssignments(courseId, courseName) {
       message.textContent = data.error || "Ошибка загрузки заданий.";
       return;
     }
+
     courseAssignmentsSection.hidden = false;
     courseAssignmentsTitle.textContent = `Задания курса: ${courseName}`;
     assignmentsList.innerHTML = "";
     assignmentFilesSection.hidden = true;
+    submissionSection.hidden = true;
+    selectedSubmissionAssignmentId = null;
+    selectedSubmissionAssignmentTitle = "";
+    currentSubmission = null;
+
     if (data.assignments.length === 0) {
       assignmentsList.textContent = "Опубликованных заданий пока нет.";
       return;
@@ -195,13 +312,18 @@ async function loadAssignments(courseId, courseName) {
 
       const filesButton = document.createElement("button");
       filesButton.textContent = "Файлы";
-      filesButton.addEventListener("click",async () => { await loadAssignmentFiles(assignment.id,assignment.title); });
+      filesButton.addEventListener("click", async () => { await loadAssignmentFiles(assignment.id, assignment.title); });
+
+      const submissionButton = document.createElement("button");
+      submissionButton.textContent = "Моя работа";
+      submissionButton.addEventListener("click", async () => { await loadSubmission(assignment.id, assignment.title); });
 
       container.appendChild(titleElement);
       container.appendChild(scoreElement);
       container.appendChild(descriptionElement);
       container.appendChild(deadlineElement);
       container.appendChild(filesButton);
+      container.appendChild(submissionButton);
       assignmentsList.appendChild(container);
     }
   } catch (error) {
@@ -285,6 +407,76 @@ async function loadAssignmentFiles(assignmentId, assignmentTitle) {
   }
 }
 
+async function loadSubmission(assignmentId, assignmentTitle) {
+  try {
+    const response = await fetch(`${apiUrl}/api/student/assignments/${assignmentId}/submission`,{
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка получения работы.";
+      return;
+    }
+    selectedSubmissionAssignmentId = assignmentId;
+    selectedSubmissionAssignmentTitle = assignmentTitle;
+    currentSubmission = data.submission;
+    submissionSection.hidden = false;
+    submissionTitle.textContent = `Моя работа: ${assignmentTitle}`;
+    renderSubmission();
+    if (currentSubmission) {
+      await loadSubmissionFiles();
+    } else {
+      submissionFilesList.textContent = "Сначала сохраните черновик работы.";
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки работы:", error);
+    message.textContent = "Не удалось загрузить работу.";
+  }
+}
+
+async function loadSubmissionFiles() {
+  try {
+    const response = await fetch(`${apiUrl}/api/student/assignments/${selectedSubmissionAssignmentId}/submission/files`,{
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка получения файлов работы.";
+      return;
+    }
+    submissionFilesList.innerHTML = "";
+    if (data.length === 0) {
+      submissionFilesList.textContent = "Файлы работы пока не загружены.";
+      return;
+    }
+    const editable = currentSubmission && ["draft","returned"].includes(currentSubmission.status);
+    for (const file of data) {
+      const container = document.createElement("div");
+      const downloadButton = document.createElement("button");
+      downloadButton.textContent = file.original_name;
+      downloadButton.addEventListener("click",async () => {
+        await downloadSubmissionFile(file.id,file.original_name);
+      });
+      const infoElement = document.createElement("span");
+      infoElement.textContent = ` — ${formatFileSize(file.size_bytes)} — ${file.mime_type}`;
+      container.appendChild(downloadButton);
+      container.appendChild(infoElement);
+      if (editable) {
+        const deleteButton = document.createElement("button");
+        deleteButton.textContent = "Удалить";
+        deleteButton.addEventListener("click",async () => {
+          await deleteSubmissionFile(file.id,file.original_name);
+        });
+        container.appendChild(deleteButton);
+      }
+      submissionFilesList.appendChild(container);
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки файлов работы:", error);
+    message.textContent = "Не удалось загрузить файлы работы.";
+  }
+}
+
 async function checkStudentAccess() {
   try {
     const response = await fetch(`${apiUrl}/api/auth/me`,
@@ -363,6 +555,52 @@ async function downloadAssignmentFile(assignmentId, file) {
   }
 }
 
+async function downloadSubmissionFile(fileId, fileName) {
+  try {
+    const response = await fetch(`${apiUrl}/api/student/submission-files/${fileId}/download`,{
+      credentials: "include"
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      message.textContent = data.error || "Ошибка скачивания файла работы.";
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Ошибка скачивания файла работы:", error);
+    message.textContent = "Не удалось скачать файл работы.";
+  }
+}
+
+async function deleteSubmissionFile(fileId, fileName) {
+  const confirmed = confirm(`Удалить файл "${fileName}"?`);
+  if (!confirmed) return;
+  try {
+    const response = await fetch(`${apiUrl}/api/student/submission-files/${fileId}`,{
+      method: "DELETE",
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка удаления файла работы.";
+      return;
+    }
+    message.textContent = data.message;
+    await loadSubmissionFiles();
+  } catch (error) {
+    console.error("Ошибка удаления файла работы:", error);
+    message.textContent = "Не удалось удалить файл работы.";
+  }
+}
+
 function formatFileSize(sizeBytes) {
   const size = Number(sizeBytes);
   if (size < 1024) return `${size} Б`;
@@ -370,6 +608,56 @@ function formatFileSize(sizeBytes) {
   return `${(size / (1024 * 1024)).toFixed(1)} МБ`;
 }
 
+function getSubmissionStatusLabel(status) {
+  const labels = {
+    draft: "Черновик",
+    submitted: "Отправлено преподавателю",
+    returned: "Возвращено на доработку",
+    graded: "Проверено"
+  };
+  return labels[status] || status;
+}
+
+function renderSubmission() {
+  submissionFeedback.hidden = true;
+  submissionSubmittedAt.textContent = "";
+  submissionScore.textContent = "";
+  submissionTeacherComment.textContent = "";
+  submissionCheckedAt.textContent = "";
+  if (!currentSubmission) {
+    submissionStatus.textContent = "Статус: работа ещё не создана";
+    submissionComment.value = "";
+    submissionComment.disabled = false;
+    saveSubmissionButton.hidden = false;
+    submissionFileInput.disabled = true;
+    uploadSubmissionFileButton.disabled = true;
+    submitSubmissionButton.hidden = true;
+    return;
+  }
+  const editable = ["draft","returned"].includes(currentSubmission.status);
+  submissionStatus.textContent = `Статус: ${getSubmissionStatusLabel(currentSubmission.status)}`;
+  submissionComment.value = currentSubmission.student_comment || "";
+  submissionComment.disabled = !editable;
+  saveSubmissionButton.hidden = !editable;
+  submissionFileInput.disabled = !editable;
+  uploadSubmissionFileButton.disabled = !editable;
+  submitSubmissionButton.hidden = !editable;
+  if (currentSubmission.submitted_at) {
+    submissionSubmittedAt.textContent = `Отправлено: ${new Date(currentSubmission.submitted_at).toLocaleString("ru-RU")}`;
+  }
+  if (currentSubmission.teacher_comment || currentSubmission.score !== null || currentSubmission.checked_at) {
+    submissionFeedback.hidden = false;
+    if (currentSubmission.score !== null) {
+      submissionScore.textContent = `Оценка: ${currentSubmission.score}`;
+    }
+    if (currentSubmission.teacher_comment) {
+      submissionTeacherComment.textContent = `Комментарий преподавателя: ${currentSubmission.teacher_comment}`;
+    }
+    if (currentSubmission.checked_at) {
+      submissionCheckedAt.textContent = `Проверено: ${new Date(currentSubmission.checked_at).toLocaleString("ru-RU")}`;
+    }
+  }
+}
 
 async function init() {
   const accessAllowed = await checkStudentAccess();

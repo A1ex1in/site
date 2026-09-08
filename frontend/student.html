@@ -15,32 +15,66 @@
         <div id="profile">
             Загрузка...
         </div>
-    <p id="message"></p>
+        <p id="message"></p>
         <h2>Учебные курсы</h2>
         <div id="coursesList">
             Загрузка...
         </div>
+
         <section id="courseMaterialsSection" hidden>
             <h2 id="courseMaterialsTitle">Материалы курса</h2>
             <div id="materialsList">
             </div>
         </section>
+
         <section id="materialFilesSection" hidden>
             <h3 id="materialFilesTitle">Файлы материала</h3>
             <div id="materialFilesList">
             </div>
         </section>
+
         <section id="courseAssignmentsSection" hidden>
             <h2 id="courseAssignmentsTitle">Задания курса</h2>
             <div id="assignmentsList">
             </div>
         </section>
+
         <section id="assignmentFilesSection" hidden>
             <h3 id="assignmentFilesTitle">Файлы задания</h3>
             <div id="assignmentFilesList">
             </div>
         </section>
 
+        <section id="submissionSection" hidden>
+            <h3 id="submissionTitle">Моя работа</h3>
+            <p id="submissionStatus"></p>
+            <p id="submissionSubmittedAt"></p>
+
+            <form id="submissionForm">
+                <div>
+                    <label for="submissionComment">Комментарий к работе</label>
+                    <textarea id="submissionComment"></textarea>
+                </div>
+
+                <button id="saveSubmissionButton" type="submit">Сохранить черновик</button>
+            </form>
+
+            <div id="submissionFeedback" hidden>
+                <p id="submissionScore"></p>
+                <p id="submissionTeacherComment"></p>
+                <p id="submissionCheckedAt"></p>
+            </div>
+            <h4>Файлы работы</h4>
+
+            <form id="submissionFileForm">
+                <input id="submissionFileInput" type="file" required>
+                <button id="uploadSubmissionFileButton" type="submit">Загрузить файл</button>
+            </form>
+
+            <div id="submissionFilesList">
+            </div>
+            <button id="submitSubmissionButton" type="button">Отправить преподавателю</button>
+        </section>
     <script src="student.js"></script>
 </body>
 </html>

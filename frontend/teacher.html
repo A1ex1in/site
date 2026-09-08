@@ -10,161 +10,190 @@
 
 <body>
     <h1>Кабинет преподавателя</h1>
-    <button id="logoutButton">Выйти</button>
+        <button id="logoutButton">Выйти</button>
     <h2>Заявки на регистрацию</h2>
-    <div id="studentsList">Загрузка...</div>
-    <p id="message"></p>
-    <h2>Учебные группы</h2>
-    <form id="groupForm">
-        <div>
-            <label for="groupName">Название группы</label>
-            <input id="groupName" type="text" placeholder="Например, АТ-232" required>
+        <div id="studentsList">
+            Загрузка...
         </div>
-        <div>
-            <label for="groupDescription">Описание</label>
-            <input id="groupDescription" type="text" placeholder="Учебная группа АТ-232">
-        </div>
-        <button type="submit">Добавить группу</button>
-    </form>
-    <div id="groupsList">
-        Загрузка групп...
-    </div>
-    <section id="groupStudentsSection" hidden>
-        <h3 id="selectedGroupName">Студенты группы</h3>
-        <div id="groupStudentsList">
-        </div>
-    </section>
-    <section id="studentDetailsSection" hidden>
-        <h3>Карточка студента</h3>
-        <div id="studentDetails">
-        </div>
-        <h4>Изменить группу</h4>
-        <form id="changeGroupForm">
-            <select id="studentGroupSelect" required>
-            </select>
-            <button type="submit">Сохранить группу</button>
-        </form>
-        <button id="studentStatusButton" type="button"></button>
-    </section>
-    <h2>Дисциплины</h2>
-    <form id="disciplineForm">
-        <div>
-            <label for="disciplineName">Название дисциплины</label>
-            <input id="disciplineName" type="text" placeholder="Микропроцессорные системы" required>
-        </div>
-        <div>
-            <label for="disciplineCode">Код</label>
-            <input id="disciplineCode" type="text" placeholder="МПС" required>
-        </div>
-        <div>
-            <label for="disciplineDescription">Описание</label>
-            <input id="disciplineDescription" type="text" placeholder="Описание дисциплины">
-        </div>
-        <button type="submit">Добавить дисциплину</button>
-    </form>
-    <div id="disciplinesList">
-        Загрузка дисциплин...
-    </div>
-    <h2>Учебные курсы</h2>
-    <form id="courseForm">
-        <div>
-            <label for="courseDiscipline">Дисциплина</label>
-            <select id="courseDiscipline" required></select>
-        </div>
-        <div>
-            <label for="courseGroup">Группа</label>
-            <select id="courseGroup" required></select>
-        </div>
-        <div>
-            <label for="courseAcademicYear">Учебный год</label>
-            <input id="courseAcademicYear" type="text" placeholder="2026/2027" required>
-        </div>
-        <div>
-            <label for="courseSemester">Семестр</label>
-            <select id="courseSemester" required>
-                <option value="1">1</option>
-                <option value="2">2</option>
-            </select>
-        </div>
-        <button type="submit">Создать курс</button>
-    </form>
-    <div id="coursesList">
-        Загрузка учебных курсов...
-    </div>
-    <h2>Материалы курса</h2>
-    <section id="courseMaterialsSection" hidden>
-        <h2 id="courseMaterialsTitle">Материалы курса</h2>
-        <form id="materialForm">
+        <p id="message"></p>
+        <h2>Учебные группы</h2>
+
+        <form id="groupForm">
             <div>
-                <label for="materialTitle">Название</label>
-                <input id="materialTitle" type="text" required>
+                <label for="groupName">Название группы</label>
+                <input id="groupName" type="text" placeholder="Например, АТ-232" required>
             </div>
             <div>
-                <label for="materialType">Тип материала</label>
-                <select id="materialType">
-                    <option value="lecture">Лекция</option>
-                    <option value="presentation">Презентация</option>
-                    <option value="methodical">Методический материал</option>
-                    <option value="other">Прочее</option>
+                <label for="groupDescription">Описание</label>
+                <input id="groupDescription" type="text" placeholder="Учебная группа АТ-232">
+            </div>
+            <button type="submit">Добавить группу</button>
+        </form>
+
+        <div id="groupsList">
+            Загрузка групп...
+        </div>
+
+        <section id="groupStudentsSection" hidden>
+            <h3 id="selectedGroupName">Студенты группы</h3>
+            <div id="groupStudentsList">
+            </div>
+        </section>
+
+        <section id="studentDetailsSection" hidden>
+            <h3>Карточка студента</h3>
+            <div id="studentDetails">
+            </div>
+            <h4>Изменить группу</h4>
+
+            <form id="changeGroupForm">
+
+                <select id="studentGroupSelect" required>
+                </select>
+
+                <button type="submit">Сохранить группу</button>
+            </form>
+
+            <button id="studentStatusButton" type="button"></button>
+        </section>
+
+    <h2>Дисциплины</h2>
+
+        <form id="disciplineForm">
+            <div>
+                <label for="disciplineName">Название дисциплины</label>
+                <input id="disciplineName" type="text" placeholder="Микропроцессорные системы" required>
+            </div>
+            <div>
+                <label for="disciplineCode">Код</label>
+                <input id="disciplineCode" type="text" placeholder="МПС" required>
+            </div>
+            <div>
+                <label for="disciplineDescription">Описание</label>
+                <input id="disciplineDescription" type="text" placeholder="Описание дисциплины">
+            </div>
+            <button type="submit">Добавить дисциплину</button>
+        </form>
+
+        <div id="disciplinesList">
+            Загрузка дисциплин...
+        </div>
+        <h2>Учебные курсы</h2>
+
+        <form id="courseForm">
+            <div>
+                <label for="courseDiscipline">Дисциплина</label>
+                <select id="courseDiscipline" required></select>
+            </div>
+            <div>
+                <label for="courseGroup">Группа</label>
+                <select id="courseGroup" required></select>
+            </div>
+            <div>
+                <label for="courseAcademicYear">Учебный год</label>
+                <input id="courseAcademicYear" type="text" placeholder="2026/2027" required>
+            </div>
+            <div>
+                <label for="courseSemester">Семестр</label>
+                <select id="courseSemester" required>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
                 </select>
             </div>
-            <div>
-                <label for="materialDescription">Описание</label>
-                <input id="materialDescription" type="text">
-            </div>
-            <button type="submit">Создать материал</button>
+            <button type="submit">Создать курс</button>
         </form>
-        <div id="materialsList">
+
+        <div id="coursesList">
+            Загрузка учебных курсов...
         </div>
-    </section>
+    <h2>Материалы курса</h2>
+
+        <section id="courseMaterialsSection" hidden>
+            <h2 id="courseMaterialsTitle">Материалы курса</h2>
+
+            <form id="materialForm">
+                <div>
+                    <label for="materialTitle">Название</label>
+                    <input id="materialTitle" type="text" required>
+                </div>
+                <div>
+                    <label for="materialType">Тип материала</label>
+                    <select id="materialType">
+                        <option value="lecture">Лекция</option>
+                        <option value="presentation">Презентация</option>
+                        <option value="methodical">Методический материал</option>
+                        <option value="other">Прочее</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="materialDescription">Описание</label>
+                    <input id="materialDescription" type="text">
+                </div>
+                <button type="submit">Создать материал</button>
+            </form>
+
+            <div id="materialsList">
+            </div>
+        </section>
+
     <h2>Файлы</h2>
+
     <section id="materialFilesSection" hidden>
-        <h3 id="materialFilesTitle">Файлы материала</h3>
-        <form id="materialFileForm">
-            <input id="materialFileInput" type="file" required>
-            <button type="submit">Загрузить файл</button>
-        </form>
-        <div id="materialFilesList">
-        </div>
-    </section>
+            <h3 id="materialFilesTitle">Файлы материала</h3>
+
+            <form id="materialFileForm">
+                <input id="materialFileInput" type="file" required>
+                <button type="submit">Загрузить файл</button>
+            </form>
+
+            <div id="materialFilesList">
+            </div>
+        </section>
+
     <h2>Задания курса</h2>
-    <section id="courseAssignmentsSection" hidden>
-        <h2 id="courseAssignmentsTitle">Задания курса</h2>
-        <form id="assignmentForm">
-            <div>
-                <label for="assignmentTitle">Название</label>
-                <input id="assignmentTitle" type="text" required>
+
+        <section id="courseAssignmentsSection" hidden>
+            <h2 id="courseAssignmentsTitle">Задания курса</h2>
+
+            <form id="assignmentForm">
+                <div>
+                    <label for="assignmentTitle">Название</label>
+                    <input id="assignmentTitle" type="text" required>
+                </div>
+                <div>
+                    <label for="assignmentDescription">Описание</label>
+                    <textarea id="assignmentDescription"></textarea>
+                </div>
+                <div>
+                    <label for="assignmentDeadline">Срок выполнения</label>
+                    <input id="assignmentDeadline" type="datetime-local">
+                </div>
+                <div>
+                    <label for="assignmentMaxScore">Максимальный балл</label>
+                    <input id="assignmentMaxScore" type="number" min="0.01" step="0.01" value="5" required>
+                </div>
+                <button type="submit">Создать задание</button>
+            </form>
+
+            <div id="assignmentsList">
             </div>
-            <div>
-                <label for="assignmentDescription">Описание</label>
-                <textarea id="assignmentDescription"></textarea>
+        </section>
+
+        <section id="assignmentFilesSection" hidden>
+            <h3 id="assignmentFilesTitle">Файлы задания</h3>
+            <h4>Загрузить новый файл</h4>
+
+            <form id="assignmentFileForm">
+                <input id="assignmentFileInput" type="file" required>
+                <button type="submit">Загрузить файл</button>
+            </form>
+
+            <div id="assignmentFilesList">
             </div>
-            <div>
-                <label for="assignmentDeadline">Срок выполнения</label>
-                <input id="assignmentDeadline" type="datetime-local">
+            <h4>Файлы из материалов курса</h4>
+            <div id="assignmentMaterialFilesList">
             </div>
-            <div>
-                <label for="assignmentMaxScore">Максимальный балл</label>
-                <input id="assignmentMaxScore" type="number" min="0.01" step="0.01" value="5" required>
-            </div>
-            <button type="submit">Создать задание</button>
-        </form>
-        <div id="assignmentsList">
-        </div>
-    </section>
-    <section id="assignmentFilesSection" hidden>
-        <h3 id="assignmentFilesTitle">Файлы задания</h3>
-        <h4>Загрузить новый файл</h4>
-        <form id="assignmentFileForm">
-            <input id="assignmentFileInput" type="file" required>
-            <button type="submit">Загрузить файл</button>
-        </form>
-        <div id="assignmentFilesList">
-        </div>
-        <h4>Файлы из материалов курса</h4>
-        <div id="assignmentMaterialFilesList">
-        </div>
-    </section>
+        </section>
 
     <script src="teacher.js"></script>
 </body>
