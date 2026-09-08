@@ -51,8 +51,25 @@ const assignmentFileForm = document.getElementById("assignmentFileForm");
 const assignmentFileInput = document.getElementById("assignmentFileInput");
 const assignmentFilesList = document.getElementById("assignmentFilesList");
 const assignmentMaterialFilesList = document.getElementById("assignmentMaterialFilesList");
+const submissionsSection = document.getElementById("submissionsSection");
+const submissionsTitle = document.getElementById("submissionsTitle");
+const submissionsList = document.getElementById("submissionsList");
+const submissionDetailsSection = document.getElementById("submissionDetailsSection");
+const submissionDetailsTitle = document.getElementById("submissionDetailsTitle");
+const submissionStudent = document.getElementById("submissionStudent");
+const submissionStatus = document.getElementById("submissionStatus");
+const submissionComment = document.getElementById("submissionComment");
+const submissionSubmittedAt = document.getElementById("submissionSubmittedAt");
+const submissionLate = document.getElementById("submissionLate");
+const submissionFilesList = document.getElementById("submissionFilesList");
+const teacherSubmissionComment = document.getElementById("teacherSubmissionComment");
+const submissionScoreInput = document.getElementById("submissionScoreInput");
+const submissionMaxScore = document.getElementById("submissionMaxScore");
+const returnSubmissionButton = document.getElementById("returnSubmissionButton");
+const gradeSubmissionButton = document.getElementById("gradeSubmissionButton");
 
-
+let selectedSubmissionId = null;
+let selectedSubmissionMaxScore = null;
 let selectedMaterialId = null;
 let selectedMaterialTitle = "";
 let selectedCourseId = null;
@@ -544,7 +561,11 @@ async function loadAssignments(courseId, courseName = "") {
 
       const filesButton = document.createElement("button");
       filesButton.textContent = "Файлы";
-      filesButton.addEventListener("click",async () => { await loadAssignmentFiles(assignment.id,assignment.title); });
+      filesButton.addEventListener("click", async () => { await loadAssignmentFiles(assignment.id, assignment.title); });
+
+      const submissionsButton = document.createElement("button");
+      submissionsButton.textContent = "Работы студентов";
+      submissionsButton.addEventListener("click", async () => { await loadSubmissions(assignment.id, assignment.title); });
 
       container.appendChild(titleElement);
       container.appendChild(statusElement);
@@ -553,6 +574,7 @@ async function loadAssignments(courseId, courseName = "") {
       container.appendChild(deadlineElement);
       container.appendChild(publicationButton);
       container.appendChild(filesButton);
+      container.appendChild(submissionsButton);
       assignmentsList.appendChild(container);
     }
   } catch (error) {
@@ -981,6 +1003,57 @@ async function loadAssignmentMaterialFiles(assignmentId) {
   }
 }
 
+async function loadSubmissions(assignmentId, assignmentTitle) {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/assignments/${assignmentId}/submissions`,{
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка получения работ студентов.";
+      return;
+    }
+    submissionsSection.hidden = false;
+    submissionDetailsSection.hidden = true;
+    submissionsTitle.textContent = `Работы студентов: ${assignmentTitle}`;
+    submissionsList.innerHTML = "";
+    if (data.length === 0) {
+      submissionsList.textContent = "Работы студентов пока отсутствуют.";
+      return;
+    }
+    for (const submission of data) {
+      const container = document.createElement("div");
+      const fullName = [
+        submission.last_name,
+        submission.first_name,
+        submission.middle_name
+      ].filter(Boolean).join(" ");
+      const studentElement = document.createElement("strong");
+      studentElement.textContent = fullName;
+      const statusElement = document.createElement("span");
+      statusElement.textContent = ` — ${getSubmissionStatusLabel(submission.status)}`;
+      const numberElement = document.createElement("span");
+      numberElement.textContent = submission.student_number ? ` — ${submission.student_number}` : "";
+      const lateElement = document.createElement("span");
+      lateElement.textContent = submission.is_late ? " — просрочено" : "";
+      const openButton = document.createElement("button");
+      openButton.textContent = "Открыть";
+      openButton.addEventListener("click",async () => {
+        await openSubmission(submission);
+      });
+      container.appendChild(studentElement);
+      container.appendChild(numberElement);
+      container.appendChild(statusElement);
+      container.appendChild(lateElement);
+      container.appendChild(openButton);
+      submissionsList.appendChild(container);
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки работ студентов:", error);
+    message.textContent = "Не удалось загрузить работы студентов.";
+  }
+}
+
 async function downloadAssignmentFile(fileId, fileName) {
   try {
     const response = await fetch(`${apiUrl}/api/teacher/assignment-files/${fileId}/download`,{
@@ -1155,6 +1228,33 @@ async function rejectStudent(studentId) {
   await loadPendingStudents();
 }
 
+async function openSubmission(submission) {
+  selectedSubmissionId = submission.id;
+  const fullName = [
+    submission.last_name,
+    submission.first_name,
+    submission.middle_name
+  ].filter(Boolean).join(" ");
+  submissionDetailsSection.hidden = false;
+  submissionDetailsTitle.textContent = `Работа студента: ${fullName}`;
+  submissionStudent.textContent = `Студент: ${fullName}`;
+  submissionStatus.textContent = `Статус: ${getSubmissionStatusLabel(submission.status)}`;
+  submissionComment.textContent = `Комментарий студента: ${submission.student_comment || "Не указан"}`;
+  submissionSubmittedAt.textContent = submission.submitted_at ? `Отправлено: ${new Date(submission.submitted_at).toLocaleString("ru-RU")}` : "Работа ещё не отправлена";
+  submissionLate.textContent = submission.is_late ? "Работа отправлена после срока" : "";
+  teacherSubmissionComment.value = submission.teacher_comment || "";
+  submissionScoreInput.value = submission.score ?? "";
+  await loadTeacherSubmissionFiles(submission.id);
+  const editable = ["submitted","graded"].includes(submission.status);
+  returnSubmissionButton.hidden = submission.status !== "submitted";
+  gradeSubmissionButton.hidden = !editable;
+  submissionScoreInput.disabled = !editable;
+  teacherSubmissionComment.disabled = !["submitted", "graded"].includes(submission.status);
+  selectedSubmissionMaxScore = Number(submission.max_score);
+  submissionMaxScore.textContent = `/ ${submission.max_score}`;
+  submissionScoreInput.max = submission.max_score;
+}
+
 async function deleteMaterialFile(fileId, fileName) {
   const confirmed = confirm(`Удалить файл "${fileName}"?`);
   if (!confirmed) return;
@@ -1202,6 +1302,16 @@ function formatFileSize(sizeBytes) {
   if (size < 1024) return `${size} Б`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} КБ`;
   return `${(size / (1024 * 1024)).toFixed(1)} МБ`;
+}
+
+function getSubmissionStatusLabel(status) {
+  const labels = {
+    draft: "Черновик",
+    submitted: "Отправлено",
+    returned: "Возвращено на доработку",
+    graded: "Проверено"
+  };
+  return labels[status] || status;
 }
 
 async function init() {

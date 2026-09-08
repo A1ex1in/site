@@ -195,6 +195,34 @@
             </div>
         </section>
 
+        <section id="submissionsSection" hidden>
+            <h3 id="submissionsTitle">Работы студентов</h3>
+            <div id="submissionsList"></div>
+        </section>
+
+        <section id="submissionDetailsSection" hidden>
+            <h3 id="submissionDetailsTitle">Работа студента</h3>
+            <p id="submissionStudent"></p>
+            <p id="submissionStatus"></p>
+            <p id="submissionComment"></p>
+            <p id="submissionSubmittedAt"></p>
+            <p id="submissionLate"></p>
+            <h4>Файлы работы</h4>
+            <div id="submissionFilesList">
+            </div>
+            <div>
+                <label for="teacherSubmissionComment">Комментарий преподавателя</label>
+                <textarea id="teacherSubmissionComment"></textarea>
+            </div>
+            <div>
+                <label for="submissionScoreInput">Балл</label>
+                <input id="submissionScoreInput" type="number" min="0" step="0.01">
+                <span id="submissionMaxScore"></span>
+            </div>
+            <button id="returnSubmissionButton" type="button">Вернуть на доработку</button>
+            <button id="gradeSubmissionButton" type="button">Оценить работу</button>
+        </section>
+
     <script src="teacher.js"></script>
 </body>
 </html>

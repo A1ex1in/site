@@ -1083,6 +1083,198 @@ router.delete("/assignments/:assignmentId/material-files/:materialFileId",requir
   }
 });
 
+// Получить работы студентов по заданию
+router.get("/assignments/:assignmentId/submissions",requireAuth,requireTeacher,requireAssignmentAccess,async (request, response) => {
+  try {
+    const result = await pool.query(`
+      SELECT ss.id, ss.student_id, ss.status, ss.student_comment, ss.submitted_at, ss.score, ss.teacher_comment, ss.checked_at, a.max_score, u.first_name, u.last_name, u.middle_name, sp.student_number,
+        CASE
+          WHEN a.deadline IS NOT NULL
+            AND ss.submitted_at IS NOT NULL
+            AND ss.submitted_at > a.deadline
+          THEN TRUE
+          ELSE FALSE
+        END AS is_late
+      FROM student_submissions ss
+      JOIN assignments a ON a.id = ss.assignment_id
+      JOIN student_profiles sp ON sp.user_id = ss.student_id
+      JOIN users u ON u.id = ss.student_id
+      WHERE ss.assignment_id = $1
+      ORDER BY
+        CASE ss.status
+          WHEN 'submitted' THEN 1
+          WHEN 'returned' THEN 2
+          WHEN 'graded' THEN 3
+          WHEN 'draft' THEN 4
+        END,
+        ss.submitted_at,
+        u.last_name,
+        u.first_name
+    `,[request.assignment.id]);
+    response.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка получения работ студентов:", error);
+    response.status(500).json({ error: "Ошибка получения работ студентов" });
+  }
+});
+
+// Получить файлы работы студента
+router.get("/submissions/:submissionId/files",requireAuth,requireTeacher,requireTeacherSubmissionAccess,async (request, response) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, submission_id, original_name, mime_type, size_bytes, created_at
+      FROM submission_files
+      WHERE submission_id = $1
+      ORDER BY created_at, id
+    `,[request.submission.id]);
+    response.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка получения файлов работы студента:", error);
+    response.status(500).json({ error: "Ошибка получения файлов работы студента" });
+  }
+});
+
+// Скачать файл работы студента
+router.get("/submission-files/:id/download",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const fileId = request.params.id;
+    if (!/^\d+$/.test(fileId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор файла" });
+    }
+    const result = await pool.query(`
+      SELECT
+        sf.original_name,
+        sf.storage_key
+      FROM submission_files sf
+      JOIN student_submissions ss ON ss.id = sf.submission_id
+      JOIN assignments a ON a.id = ss.assignment_id
+      JOIN courses c ON c.id = a.course_id
+      WHERE sf.id = $1
+        AND c.teacher_id = $2
+    `,[fileId,request.user.id]);
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: "Файл не найден" });
+    }
+    const file = result.rows[0];
+    const filePath = path.resolve(config.storageRoot,file.storage_key);
+    const relativePath = path.relative(config.storageRoot,filePath);
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+      console.error("Некорректный путь файла:", file.storage_key);
+      return response.status(500).json({ error: "Ошибка доступа к файлу" });
+    }
+    try {
+      await fs.promises.access(filePath,fs.constants.R_OK);
+    } catch {
+      return response.status(404).json({ error: "Файл отсутствует в хранилище" });
+    }
+    response.download(filePath,file.original_name,(error) => {
+      if (!error) return;
+      console.error("Ошибка скачивания файла работы студента:", error);
+      if (!response.headersSent) {
+        response.status(500).json({ error: "Ошибка скачивания файла" });
+      }
+    });
+  } catch (error) {
+    console.error("Ошибка получения файла работы студента:", error);
+    response.status(500).json({ error: "Ошибка получения файла работы студента" });
+  }
+});
+
+// Вернуть работу студенту на доработку
+router.patch("/submissions/:submissionId/return",requireAuth,requireTeacher,requireTeacherSubmissionAccess,async (request, response) => {
+  try {
+    const { teacherComment } = request.body;
+    const normalizedComment = typeof teacherComment === "string" ? teacherComment.trim() : "";
+    if (request.submission.status !== "submitted") {
+      return response.status(409).json({ error: "Вернуть можно только отправленную работу" });
+    }
+    if (!normalizedComment) {
+      return response.status(400).json({ error: "Укажите комментарий для студента" });
+    }
+    const result = await pool.query(`
+      UPDATE student_submissions
+      SET
+        status = 'returned',
+        score = NULL,
+        teacher_comment = $1,
+        checked_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING
+        id,
+        assignment_id,
+        student_id,
+        status,
+        student_comment,
+        submitted_at,
+        score,
+        teacher_comment,
+        checked_at,
+        updated_at
+    `,[normalizedComment,request.submission.id]);
+    response.json({
+      message: "Работа возвращена студенту на доработку",
+      submission: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Ошибка возврата работы:", error);
+    response.status(500).json({ error: "Ошибка возврата работы" });
+  }
+});
+
+// Проверить и оценить работу
+router.patch("/submissions/:submissionId/grade",requireAuth,requireTeacher,requireTeacherSubmissionAccess,async (request, response) => {
+  try {
+    const { score, teacherComment } = request.body;
+    if (!["submitted","graded"].includes(request.submission.status)) {
+      return response.status(409).json({ error: "Эта работа недоступна для оценивания" });
+    }
+    const normalizedScore = Number(score);
+    const maxScore = Number(request.submission.max_score);
+    const normalizedComment = typeof teacherComment === "string" ? teacherComment.trim() : "";
+    if (!Number.isFinite(normalizedScore) || normalizedScore < 0) {
+      return response.status(400).json({ error: "Некорректный балл" });
+    }
+    if (normalizedScore > maxScore) {
+      return response.status(400).json({
+        error: `Балл не может превышать максимальный балл задания: ${maxScore}`
+      });
+    }
+    const result = await pool.query(`
+      UPDATE student_submissions
+      SET
+        status = 'graded',
+        score = $1,
+        teacher_comment = $2,
+        checked_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING
+        id,
+        assignment_id,
+        student_id,
+        status,
+        student_comment,
+        submitted_at,
+        score,
+        teacher_comment,
+        checked_at,
+        updated_at
+    `,[
+      normalizedScore,
+      normalizedComment || null,
+      request.submission.id
+    ]);
+    response.json({
+      message: "Работа оценена",
+      submission: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Ошибка оценивания работы:", error);
+    response.status(500).json({ error: "Ошибка оценивания работы" });
+  }
+});
+
 async function requireMaterialAccess(request, response, next) {
   try {
     const materialId = request.params.materialId;
@@ -1131,6 +1323,32 @@ async function requireAssignmentAccess(request, response, next) {
   } catch (error) {
     console.error("Ошибка проверки доступа к заданию:", error);
     response.status(500).json({ error: "Ошибка проверки доступа к заданию" });
+  }
+}
+
+async function requireTeacherSubmissionAccess(request, response, next) {
+  try {
+    const submissionId = request.params.submissionId;
+    if (!/^\d+$/.test(submissionId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор работы" });
+    }
+    const result = await pool.query(`
+      SELECT ss.id, ss.assignment_id, ss.student_id, ss.status, ss.student_comment, ss.submitted_at, ss.score, ss.teacher_comment, ss.checked_at, a.title
+        AS assignment_title, a.max_score, a.deadline
+      FROM student_submissions ss
+      JOIN assignments a ON a.id = ss.assignment_id
+      JOIN courses c ON c.id = a.course_id
+      WHERE ss.id = $1
+        AND c.teacher_id = $2
+    `,[submissionId,request.user.id]);
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: "Работа студента не найдена" });
+    }
+    request.submission = result.rows[0];
+    next();
+  } catch (error) {
+    console.error("Ошибка проверки доступа к работе студента:", error);
+    response.status(500).json({ error: "Ошибка проверки доступа к работе студента" });
   }
 }
 
