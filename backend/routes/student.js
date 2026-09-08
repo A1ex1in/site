@@ -4,6 +4,7 @@ const path = require("path");
 const pool = require("../db");
 const config = require("../config");
 const { requireAuth, requireStudent } = require("../middleware/auth");
+const uploadSubmissionFile = require("../middleware/submissionUpload");
 
 const router = express.Router();
 
@@ -350,6 +351,283 @@ router.get("/assignments/:assignmentId/files/:source/:fileId/download",requireAu
   }
 });
 
+// Получить работу студента по заданию
+router.get("/assignments/:assignmentId/submission",requireAuth,requireStudent,requireStudentAssignmentAccess,async (request, response) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, assignment_id, student_id, status, student_comment, submitted_at, score, teacher_comment, checked_at, created_at, updated_at
+      FROM student_submissions
+      WHERE assignment_id = $1
+        AND student_id = $2
+    `,[request.assignment.id,request.user.id]);
+    response.json({
+      submission: result.rows[0] || null
+    });
+  } catch (error) {
+    console.error("Ошибка получения работы студента:", error);
+    response.status(500).json({ error: "Ошибка получения работы студента" });
+  }
+});
+
+// Создать или сохранить черновик работы
+router.put("/assignments/:assignmentId/submission",requireAuth,requireStudent,requireStudentAssignmentAccess,async (request, response) => {
+  try {
+    const { studentComment } = request.body;
+    const normalizedComment = typeof studentComment === "string" ? studentComment.trim() : "";
+    const existingResult = await pool.query(`
+      SELECT id, status
+      FROM student_submissions
+      WHERE assignment_id = $1
+        AND student_id = $2
+    `,[request.assignment.id,request.user.id]);
+    let result;
+    if (existingResult.rowCount === 0) {
+      result = await pool.query(`
+        INSERT INTO student_submissions (
+          assignment_id,
+          student_id,
+          student_comment
+        )
+        VALUES ($1, $2, $3)
+        RETURNING id, assignment_id, student_id, status, student_comment, submitted_at, score, teacher_comment, checked_at, created_at, updated_at
+      `,[
+        request.assignment.id,
+        request.user.id,
+        normalizedComment || null
+      ]);
+      return response.status(201).json({
+        message: "Черновик работы создан",
+        submission: result.rows[0]
+      });
+    }
+    const existingSubmission = existingResult.rows[0];
+    if (!["draft","returned"].includes(existingSubmission.status)) {
+      return response.status(409).json({
+        error: existingSubmission.status === "submitted"
+          ? "Работа уже отправлена преподавателю"
+          : "Проверенная работа недоступна для изменения"
+      });
+    }
+    result = await pool.query(`
+      UPDATE student_submissions
+      SET
+        student_comment = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, assignment_id, student_id, status, student_comment, submitted_at, score, teacher_comment, checked_at, created_at, updated_at
+    `,[normalizedComment || null,existingSubmission.id]);
+    response.json({
+      message: "Работа сохранена",
+      submission: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Ошибка сохранения работы студента:", error);
+    response.status(500).json({ error: "Ошибка сохранения работы студента" });
+  }
+});
+
+// Отправить работу преподавателю
+router.post("/assignments/:assignmentId/submission/submit",requireAuth,requireStudent,requireStudentAssignmentAccess,async (request, response) => {
+  try {
+    const submissionResult = await pool.query(`
+      SELECT id, status
+      FROM student_submissions
+      WHERE assignment_id = $1
+        AND student_id = $2
+    `,[request.assignment.id,request.user.id]);
+    if (submissionResult.rowCount === 0) {
+      return response.status(404).json({ error: "Сначала создайте работу" });
+    }
+    const submission = submissionResult.rows[0];
+    if (!["draft","returned"].includes(submission.status)) {
+      return response.status(409).json({
+        error: submission.status === "submitted" ? "Работа уже отправлена преподавателю" : "Работа уже проверена"
+      });
+    }
+    const result = await pool.query(`
+      UPDATE student_submissions
+      SET
+        status = 'submitted',
+        submitted_at = CURRENT_TIMESTAMP,
+        score = NULL,
+        checked_at = NULL,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING id, assignment_id, student_id, status, student_comment, submitted_at, score,
+        teacher_comment, checked_at, created_at, updated_at
+    `,[submission.id]);
+    response.json({
+      message: "Работа отправлена преподавателю",
+      submission: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Ошибка отправки работы:", error);
+    response.status(500).json({ error: "Ошибка отправки работы" });
+  }
+});
+
+// Загрузить файл работы студента
+router.post("/assignments/:assignmentId/submission/files",requireAuth,requireStudent,requireStudentAssignmentAccess,requireEditableSubmission,uploadSubmissionFile,async (request, response) => {
+  try {
+    if (!request.file) {
+      return response.status(400).json({ error: "Необходимо выбрать файл" });
+    }
+    const storageKey = `submissions/${request.file.filename}`;
+    const result = await pool.query(`
+      INSERT INTO submission_files (submission_id, uploaded_by, original_name, stored_name, storage_key, mime_type, size_bytes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, submission_id, original_name, mime_type, size_bytes, created_at
+    `,[
+      request.submission.id,
+      request.user.id,
+      request.file.originalname,
+      request.file.filename,
+      storageKey,
+      request.file.mimetype,
+      request.file.size
+    ]);
+    response.status(201).json({
+      message: "Файл работы загружен",
+      file: result.rows[0]
+    });
+  } catch (error) {
+    if (request.file?.path) {
+      await fs.promises.unlink(request.file.path).catch(() => {});
+    }
+    console.error("Ошибка сохранения файла работы:", error);
+    response.status(500).json({ error: "Ошибка сохранения файла работы" });
+  }
+});
+
+// Получить файлы работы студента
+router.get("/assignments/:assignmentId/submission/files",requireAuth,requireStudent,requireStudentAssignmentAccess,async (request, response) => {
+  try {
+    const submissionResult = await pool.query(`
+      SELECT id, status
+      FROM student_submissions
+      WHERE assignment_id = $1
+        AND student_id = $2
+    `,[request.assignment.id,request.user.id]);
+    if (submissionResult.rowCount === 0) {
+      return response.json([]);
+    }
+    const result = await pool.query(`
+      SELECT id, submission_id, original_name, mime_type, size_bytes, created_at
+      FROM submission_files
+      WHERE submission_id = $1
+      ORDER BY created_at, id
+    `,[submissionResult.rows[0].id]);
+    response.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка получения файлов работы:", error);
+    response.status(500).json({ error: "Ошибка получения файлов работы" });
+  }
+});
+
+// Скачать файл работы студента
+router.get("/submission-files/:id/download",requireAuth,requireStudent,async (request, response) => {
+  try {
+    const fileId = request.params.id;
+    if (!/^\d+$/.test(fileId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор файла" });
+    }
+    const result = await pool.query(`
+      SELECT
+        sf.id,
+        sf.original_name,
+        sf.storage_key
+      FROM submission_files sf
+      JOIN student_submissions ss ON ss.id = sf.submission_id
+      WHERE sf.id = $1
+        AND ss.student_id = $2
+    `,[fileId,request.user.id]);
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: "Файл не найден" });
+    }
+    const file = result.rows[0];
+    const filePath = path.resolve(config.storageRoot,file.storage_key);
+    const relativePath = path.relative(config.storageRoot,filePath);
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+      console.error("Некорректный путь файла:", file.storage_key);
+      return response.status(500).json({ error: "Ошибка доступа к файлу" });
+    }
+    try {
+      await fs.promises.access(filePath,fs.constants.R_OK);
+    } catch {
+      return response.status(404).json({ error: "Файл отсутствует в хранилище" });
+    }
+    response.download(filePath,file.original_name,(error) => {
+      if (!error) return;
+      console.error("Ошибка скачивания файла работы:", error);
+      if (!response.headersSent) {
+        response.status(500).json({ error: "Ошибка скачивания файла" });
+      }
+    });
+  } catch (error) {
+    console.error("Ошибка получения файла работы:", error);
+    response.status(500).json({ error: "Ошибка получения файла работы" });
+  }
+});
+
+// Удалить файл работы студента
+router.delete("/submission-files/:id",requireAuth,requireStudent,async (request, response) => {
+  let client;
+  try {
+    const fileId = request.params.id;
+    if (!/^\d+$/.test(fileId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор файла" });
+    }
+    client = await pool.connect();
+    await client.query("BEGIN");
+    const result = await client.query(`
+      SELECT
+        sf.id,
+        sf.storage_key,
+        ss.status
+      FROM submission_files sf
+      JOIN student_submissions ss ON ss.id = sf.submission_id
+      WHERE sf.id = $1
+        AND ss.student_id = $2
+      FOR UPDATE OF sf
+    `,[fileId,request.user.id]);
+    if (result.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return response.status(404).json({ error: "Файл не найден" });
+    }
+    const file = result.rows[0];
+    if (!["draft","returned"].includes(file.status)) {
+      await client.query("ROLLBACK");
+      return response.status(409).json({
+        error: file.status === "submitted" ? "Нельзя удалить файл отправленной работы" : "Нельзя удалить файл проверенной работы"
+      });
+    }
+    const filePath = path.resolve(config.storageRoot,file.storage_key);
+    const relativePath = path.relative(config.storageRoot,filePath);
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+      await client.query("ROLLBACK");
+      console.error("Некорректный путь файла:", file.storage_key);
+      return response.status(500).json({ error: "Ошибка доступа к файлу" });
+    }
+    await client.query(`
+      DELETE FROM submission_files
+      WHERE id = $1
+    `,[fileId]);
+    try {
+      await fs.promises.unlink(filePath);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    await client.query("COMMIT");
+    response.json({ message: "Файл работы удалён" });
+  } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(() => {});
+    console.error("Ошибка удаления файла работы:", error);
+    response.status(500).json({ error: "Ошибка удаления файла работы" });
+  } finally {
+    if (client) client.release();
+  }
+});
+
 async function requireStudentAssignmentAccess(request, response, next) {
   try {
     const assignmentId = request.params.assignmentId;
@@ -379,6 +657,34 @@ async function requireStudentAssignmentAccess(request, response, next) {
   } catch (error) {
     console.error("Ошибка проверки доступа к заданию:", error);
     response.status(500).json({ error: "Ошибка проверки доступа к заданию" });
+  }
+}
+
+async function requireEditableSubmission(request, response, next) {
+  try {
+    const result = await pool.query(`
+      SELECT id, assignment_id, student_id, status
+      FROM student_submissions
+      WHERE assignment_id = $1
+        AND student_id = $2
+    `,[request.assignment.id,request.user.id]);
+
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: "Сначала создайте работу" });
+    }
+    const submission = result.rows[0];
+    if (!["draft","returned"].includes(submission.status)) {
+      return response.status(409).json({
+        error: submission.status === "submitted"
+          ? "Работа уже отправлена преподавателю"
+          : "Проверенная работа недоступна для изменения"
+      });
+    }
+    request.submission = submission;
+    next();
+  } catch (error) {
+    console.error("Ошибка проверки работы студента:", error);
+    response.status(500).json({ error: "Ошибка проверки работы студента" });
   }
 }
 
