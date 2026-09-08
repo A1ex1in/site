@@ -81,6 +81,8 @@ let selectedAssignmentCourseId = null;
 let selectedAssignmentCourseName = "";
 let selectedAssignmentId = null;
 let selectedAssignmentTitle = "";
+let selectedSubmissionsAssignmentId = null;
+let selectedSubmissionsAssignmentTitle = "";
 
 materialForm.addEventListener("submit",async (event) => {
   event.preventDefault();
@@ -450,6 +452,7 @@ returnSubmissionButton.addEventListener("click",async () => {
     }
     message.textContent = data.message;
     submissionDetailsSection.hidden = true;
+    await loadSubmissions(selectedSubmissionsAssignmentId,selectedSubmissionsAssignmentTitle);
   } catch (error) {
     console.error("Ошибка возврата работы:", error);
     message.textContent = "Не удалось вернуть работу.";
@@ -485,8 +488,7 @@ gradeSubmissionButton.addEventListener("click",async () => {
       return;
     }
     message.textContent = data.message;
-    submissionStatus.textContent = "Статус: Проверено";
-    returnSubmissionButton.hidden = true;
+    await loadSubmissions(selectedSubmissionsAssignmentId,selectedSubmissionsAssignmentTitle);
   } catch (error) {
     console.error("Ошибка оценивания работы:", error);
     message.textContent = "Не удалось оценить работу.";
@@ -1081,6 +1083,8 @@ async function loadSubmissions(assignmentId, assignmentTitle) {
       message.textContent = data.error || "Ошибка получения работ студентов.";
       return;
     }
+    selectedSubmissionsAssignmentId = assignmentId;
+    selectedSubmissionsAssignmentTitle = assignmentTitle;
     submissionsSection.hidden = false;
     submissionDetailsSection.hidden = true;
     submissionsTitle.textContent = `Работы студентов: ${assignmentTitle}`;
