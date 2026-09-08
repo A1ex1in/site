@@ -45,8 +45,7 @@ router.post("/register", async (request, response) => {
     if (!email || !password || !firstName || !lastName) {
       return response.status(400).json({ error: "Не заполнены обязательные поля" });
     }
-    const existingUser = await client.query(
-      `
+    const existingUser = await client.query(`
       SELECT id
       FROM users
       WHERE LOWER(email) = LOWER($1)
@@ -57,8 +56,7 @@ router.post("/register", async (request, response) => {
       return response.status(409).json({ error: "Пользователь с таким email уже существует" });
     }
     if (groupId) {
-      const groupResult = await client.query(
-        `
+      const groupResult = await client.query(`
         SELECT id
         FROM student_groups
         WHERE id = $1
@@ -72,8 +70,7 @@ router.post("/register", async (request, response) => {
     }
     const passwordHash = await argon2.hash(password);
     await client.query("BEGIN");
-    const userResult = await client.query(
-      `
+    const userResult = await client.query(`
       INSERT INTO users (email, password_hash, first_name, last_name, middle_name, role, status)
       VALUES ($1, $2, $3, $4, $5, 'student', 'pending')
       RETURNING id
@@ -87,8 +84,7 @@ router.post("/register", async (request, response) => {
       ]
     );
     const userId = userResult.rows[0].id;
-    await client.query(
-      `
+    await client.query(`
       INSERT INTO student_profiles (user_id, group_id, student_number)
       VALUES ($1, $2, $3)
       `,
@@ -118,8 +114,7 @@ router.post("/login", async (request, response) => {
     if (!email || !password) {
       return response.status(400).json({ error: "Необходимо указать email и пароль" });
     }
-    const result = await pool.query(
-      `
+    const result = await pool.query(`
       SELECT id, email, password_hash, first_name, last_name, middle_name, role, status
       FROM users
       WHERE LOWER(email) = LOWER($1)

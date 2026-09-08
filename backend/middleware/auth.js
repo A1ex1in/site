@@ -6,8 +6,7 @@ async function requireAuth(request, response, next) {
     return response.status(401).json({ error: "Необходима авторизация" });
   }
   try {
-    const result = await pool.query(
-      `
+    const result = await pool.query(`
       SELECT id, email, first_name, last_name, middle_name, role, status
       FROM users
       WHERE id = $1

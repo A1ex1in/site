@@ -21,9 +21,7 @@ const allowedMimeTypes = new Set([
 ]);
 
 const storage = multer.diskStorage({
-  destination: (request, file, callback) => {
-    callback(null, uploadDirectory);
-  },
+  destination: (request, file, callback) => { callback(null, uploadDirectory); },
   filename: (request, file, callback) => {
     const extension = path.extname(file.originalname).toLowerCase();
     callback(null, `${crypto.randomUUID()}${extension}`);
