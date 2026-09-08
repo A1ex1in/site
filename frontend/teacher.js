@@ -67,6 +67,9 @@ const submissionScoreInput = document.getElementById("submissionScoreInput");
 const submissionMaxScore = document.getElementById("submissionMaxScore");
 const returnSubmissionButton = document.getElementById("returnSubmissionButton");
 const gradeSubmissionButton = document.getElementById("gradeSubmissionButton");
+const journalSection = document.getElementById("journalSection");
+const journalTitle = document.getElementById("journalTitle");
+const journalContainer = document.getElementById("journalContainer");
 
 let selectedSubmissionId = null;
 let selectedSubmissionMaxScore = null;
@@ -123,7 +126,7 @@ materialForm.addEventListener("submit",async (event) => {
   }
 });
 
-courseForm.addEventListener("submit",async (event) => {
+courseForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const disciplineId = courseDiscipline.value;
   const groupId = courseGroup.value;
@@ -158,7 +161,7 @@ courseForm.addEventListener("submit",async (event) => {
   }
 });
 
-logoutButton.addEventListener("click",async () => {
+logoutButton.addEventListener("click", async () => {
     try {
       const response = await fetch(`${apiUrl}/api/auth/logout`,
         {
@@ -179,7 +182,7 @@ logoutButton.addEventListener("click",async () => {
   }
 );
 
-groupForm.addEventListener("submit",async (event) => {
+groupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const name = groupNameInput.value.trim();
     const description = groupDescriptionInput.value.trim();
@@ -213,7 +216,7 @@ groupForm.addEventListener("submit",async (event) => {
   }
 );
 
-changeGroupForm.addEventListener("submit", async (event) =>{
+changeGroupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!selectedStudentId) {
       return;
@@ -250,7 +253,7 @@ changeGroupForm.addEventListener("submit", async (event) =>{
   }
 );
 
-studentStatusButton.addEventListener("click",async () => {
+studentStatusButton.addEventListener("click", async () => {
     if (!selectedStudentId) {
       return;
     }
@@ -325,7 +328,7 @@ disciplineForm.addEventListener("submit", async (event) => {
   }
 );
 
-materialFileForm.addEventListener("submit",async (event) => {
+materialFileForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!selectedMaterialId) {
     message.textContent = "Сначала выберите учебный материал.";
@@ -358,7 +361,7 @@ materialFileForm.addEventListener("submit",async (event) => {
   }
 });
 
-assignmentForm.addEventListener("submit",async (event) => {
+assignmentForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!selectedAssignmentCourseId) {
     message.textContent = "Сначала выберите учебный курс.";
@@ -394,7 +397,7 @@ assignmentForm.addEventListener("submit",async (event) => {
   }
 });
 
-assignmentFileForm.addEventListener("submit",async (event) => {
+assignmentFileForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!selectedAssignmentId) {
     message.textContent = "Сначала выберите задание.";
@@ -427,7 +430,7 @@ assignmentFileForm.addEventListener("submit",async (event) => {
   }
 });
 
-returnSubmissionButton.addEventListener("click",async () => {
+returnSubmissionButton.addEventListener("click", async () => {
   if (!selectedSubmissionId) return;
   const teacherComment = teacherSubmissionComment.value.trim();
   if (!teacherComment) {
@@ -459,7 +462,7 @@ returnSubmissionButton.addEventListener("click",async () => {
   }
 });
 
-gradeSubmissionButton.addEventListener("click",async () => {
+gradeSubmissionButton.addEventListener("click", async () => {
   if (!selectedSubmissionId) return;
   const score = Number(submissionScoreInput.value);
   if (!Number.isFinite(score) || score < 0) {
@@ -507,6 +510,7 @@ async function loadMaterials(courseId, courseName = "") {
     }
     selectedCourseId = courseId;
     selectedCourseName = courseName;
+    journalSection.hidden = true;
     courseMaterialsSection.hidden = false;
     courseMaterialsTitle.textContent = courseName ? `Материалы курса: ${courseName}` : "Материалы курса";
     materialsList.innerHTML = "";
@@ -573,10 +577,15 @@ async function loadCourses() {
       assignmentsButton.textContent = "Задания";
       assignmentsButton.addEventListener("click",async () => { await loadAssignments(course.id, `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`); });
 
+      const journalButton = document.createElement("button");
+      journalButton.textContent = "Журнал";
+      journalButton.addEventListener("click",async () => { await loadJournal(course.id,`${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`); });
+
       container.appendChild(disciplineElement);
       container.appendChild(infoElement);
       container.appendChild(openButton);
       container.appendChild(assignmentsButton);
+      container.appendChild(journalButton);
       coursesList.appendChild(container);
     }
   } catch (error) {
@@ -597,6 +606,7 @@ async function loadAssignments(courseId, courseName = "") {
     }
     selectedAssignmentCourseId = courseId;
     selectedAssignmentCourseName = courseName;
+    journalSection.hidden = true;
     courseAssignmentsSection.hidden = false;
     courseAssignmentsTitle.textContent = `Задания курса: ${courseName}`;
     assignmentsList.innerHTML = "";
@@ -1158,6 +1168,85 @@ async function loadTeacherSubmissionFiles(submissionId) {
   }
 }
 
+async function loadJournal(courseId, courseName = "") {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/journal`,{
+      credentials: "include"
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка получения электронного журнала.";
+      return;
+    }
+    submissionsSection.hidden = true;
+    submissionDetailsSection.hidden = true;
+    journalSection.hidden = false;
+    journalTitle.textContent = `Электронный журнал: ${courseName}`;
+    journalContainer.innerHTML = "";
+    if (data.students.length === 0) {
+      journalContainer.textContent = "В группе пока нет студентов.";
+      return;
+    }
+    if (data.assignments.length === 0) {
+      journalContainer.textContent = "В учебном курсе пока нет заданий.";
+      return;
+    }
+    const table = document.createElement("table");
+    const thead = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+    const studentHeader = document.createElement("th");
+    studentHeader.textContent = "Студент";
+    const numberHeader = document.createElement("th");
+    numberHeader.textContent = "Номер";
+    headerRow.appendChild(studentHeader);
+    headerRow.appendChild(numberHeader);
+    for (const assignment of data.assignments) {
+      const assignmentHeader = document.createElement("th");
+      const titleElement = document.createElement("div");
+      titleElement.textContent = assignment.title;
+      const maxScoreElement = document.createElement("small");
+      maxScoreElement.textContent = `Макс.: ${assignment.max_score}`;
+      assignmentHeader.appendChild(titleElement);
+      assignmentHeader.appendChild(maxScoreElement);
+      if (!assignment.is_published) {
+        const draftElement = document.createElement("div");
+        draftElement.textContent = "Черновик";
+        assignmentHeader.appendChild(draftElement);
+      }
+      headerRow.appendChild(assignmentHeader);
+    }
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    const tbody = document.createElement("tbody");
+    for (const student of data.students) {
+      const row = document.createElement("tr");
+      const fullName = [
+        student.last_name,
+        student.first_name,
+        student.middle_name
+      ].filter(Boolean).join(" ");
+      const studentCell = document.createElement("td");
+      studentCell.textContent = fullName;
+      const numberCell = document.createElement("td");
+      numberCell.textContent = student.student_number || "—";
+      row.appendChild(studentCell);
+      row.appendChild(numberCell);
+      for (const assignment of data.assignments) {
+        const cell = document.createElement("td");
+        const submission = student.submissions[assignment.id];
+        cell.textContent = getJournalCellText(submission,assignment);
+        row.appendChild(cell);
+      }
+      tbody.appendChild(row);
+    }
+    table.appendChild(tbody);
+    journalContainer.appendChild(table);
+  } catch (error) {
+    console.error("Ошибка загрузки электронного журнала:", error);
+    message.textContent = "Не удалось загрузить электронный журнал.";
+  }
+}
+
 async function downloadAssignmentFile(fileId, fileName) {
   try {
     const response = await fetch(`${apiUrl}/api/teacher/assignment-files/${fileId}/download`,{
@@ -1443,6 +1532,24 @@ function getSubmissionStatusLabel(status) {
   return labels[status] || status;
 }
 
+function getJournalCellText(submission, assignment) {
+  if (!submission) return "—";
+  if (submission.status === "draft") {
+    return "Черновик";
+  }
+  if (submission.status === "submitted") {
+    return submission.is_late ? "На проверке (с опозданием)" : "На проверке";
+  }
+  if (submission.status === "returned") {
+    return submission.is_late ? "Доработка (с опозданием)" : "Доработка";
+  }
+  if (submission.status === "graded") {
+    const result = `${submission.score} / ${assignment.max_score}`;
+    return submission.is_late ? `${result} (с опозданием)` : result;
+  }
+  return submission.status;
+}
+
 async function init() {
   const accessAllowed = await checkTeacherAccess();
   if (!accessAllowed) return;
@@ -1452,5 +1559,4 @@ async function init() {
   await loadCourseOptions();
   await loadCourses();
 }
-
 init();
