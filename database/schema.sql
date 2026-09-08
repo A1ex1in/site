@@ -320,3 +320,69 @@ CREATE TABLE assignment_material_files (
         REFERENCES material_files(id)
         ON DELETE CASCADE
 );
+
+-- ------------------------------------------------------------
+-- Статусы работ студентов
+-- ------------------------------------------------------------
+
+CREATE TYPE submission_status AS ENUM (
+    'draft',
+    'submitted',
+    'returned',
+    'graded'
+);
+
+-- ------------------------------------------------------------
+-- Работы студентов
+-- ------------------------------------------------------------
+
+CREATE TABLE student_submissions (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+
+    assignment_id BIGINT NOT NULL,
+    student_id BIGINT NOT NULL,
+
+    status submission_status NOT NULL DEFAULT 'draft',
+
+    student_comment TEXT,
+    submitted_at TIMESTAMPTZ,
+
+    score NUMERIC(6,2),
+    teacher_comment TEXT,
+    checked_at TIMESTAMPTZ,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_submission_assignment
+        FOREIGN KEY (assignment_id)
+        REFERENCES assignments(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_submission_student
+        FOREIGN KEY (student_id)
+        REFERENCES student_profiles(user_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT submission_unique
+        UNIQUE (assignment_id, student_id),
+
+    CONSTRAINT submission_score_check
+        CHECK (score IS NULL OR score >= 0),
+
+    CONSTRAINT submission_submitted_at_check
+        CHECK (
+            (status = 'draft' AND submitted_at IS NULL)
+            OR
+            (status IN ('submitted', 'returned', 'graded') AND submitted_at IS NOT NULL)
+        ),
+
+    CONSTRAINT submission_graded_score_check
+        CHECK (
+            status <> 'graded'
+            OR score IS NOT NULL
+        )
+);
+
+CREATE INDEX student_submissions_student_idx
+ON student_submissions (student_id);
