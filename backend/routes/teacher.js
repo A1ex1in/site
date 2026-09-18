@@ -1376,6 +1376,88 @@ router.get("/courses/:id/journal",requireAuth,requireTeacher,async (request, res
   }
 });
 
+// Создать занятие учебного курса
+router.post("/courses/:id/lessons",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const courseId = request.params.id;
+    const { lessonDate, lessonType, topic } = request.body;
+    if (!/^\d+$/.test(courseId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор курса" });
+    }
+    const normalizedDate = typeof lessonDate === "string" ? lessonDate.trim() : "";
+    const normalizedType = typeof lessonType === "string" ? lessonType.trim() : "";
+    const normalizedTopic = typeof topic === "string" ? topic.trim() : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+      return response.status(400).json({ error: "Необходимо указать дату занятия" });
+    }
+    if (!normalizedType || normalizedType.length > 50) {
+      return response.status(400).json({ error: "Необходимо указать тип занятия" });
+    }
+    if (normalizedTopic.length > 255) {
+      return response.status(400).json({ error: "Тема занятия слишком длинная" });
+    }
+    const courseResult = await pool.query(`
+      SELECT id
+      FROM courses
+      WHERE id = $1
+        AND teacher_id = $2
+        AND is_active = TRUE
+    `,[courseId,request.user.id]);
+    if (courseResult.rowCount === 0) {
+      return response.status(404).json({ error: "Учебный курс не найден" });
+    }
+    const result = await pool.query(`
+      INSERT INTO lessons (course_id, lesson_date, lesson_type, topic)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, course_id, lesson_date::text AS lesson_date, lesson_type, topic, sort_order, created_at, updated_at
+    `,[
+      courseId,
+      normalizedDate,
+      normalizedType,
+      normalizedTopic || null
+    ]);
+    response.status(201).json({
+      message: "Занятие создано",
+      lesson: result.rows[0]
+    });
+  } catch (error) {
+    if (["22007","22008"].includes(error.code)) {
+      return response.status(400).json({ error: "Некорректная дата занятия" });
+    }
+    console.error("Ошибка создания занятия:", error);
+    response.status(500).json({ error: "Ошибка создания занятия" });
+  }
+});
+
+// Получить занятия учебного курса
+router.get("/courses/:id/lessons",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const courseId = request.params.id;
+    if (!/^\d+$/.test(courseId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор курса" });
+    }
+    const courseResult = await pool.query(`
+      SELECT id
+      FROM courses
+      WHERE id = $1
+        AND teacher_id = $2
+    `,[courseId,request.user.id]);
+    if (courseResult.rowCount === 0) {
+      return response.status(404).json({ error: "Учебный курс не найден" });
+    }
+    const result = await pool.query(`
+      SELECT id, course_id, lesson_date::text AS lesson_date, lesson_type, topic, sort_order, created_at, updated_at
+      FROM lessons
+      WHERE course_id = $1
+      ORDER BY lesson_date, sort_order, id
+    `,[courseId]);
+    response.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка получения занятий курса:", error);
+    response.status(500).json({ error: "Ошибка получения занятий курса" });
+  }
+});
+
 async function requireMaterialAccess(request, response, next) {
   try {
     const materialId = request.params.materialId;
