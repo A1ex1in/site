@@ -16,19 +16,22 @@
 BEGIN;
 
 TRUNCATE TABLE
-    user_sessions,
-    submission_files,
-    student_submissions,
-    assignment_material_files,
-    assignment_files,
-    material_files,
-    materials,
-    assignments,
-    courses,
-    student_profiles,
-    disciplines,
-    student_groups,
-    users
+  user_sessions,
+  submission_files,
+  student_submissions,
+  grades,
+  grade_items,
+  assignment_material_files,
+  assignment_files,
+  material_files,
+  materials,
+  assignments,
+  lessons,
+  courses,
+  student_profiles,
+  disciplines,
+  student_groups,
+  users
 RESTART IDENTITY
 CASCADE;
 

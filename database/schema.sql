@@ -154,6 +154,27 @@ CREATE TABLE courses (
         )
 );
 
+-- ------------------------------------------------------------
+-- Учебные занятия
+-- ------------------------------------------------------------
+CREATE TABLE lessons (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  course_id BIGINT NOT NULL,
+  lesson_date DATE NOT NULL,
+  lesson_type VARCHAR(50) NOT NULL,
+  topic VARCHAR(255),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_lesson_course
+    FOREIGN KEY (course_id)
+    REFERENCES courses(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX lessons_course_date_idx
+ON lessons (course_id, lesson_date);
 
 -- ------------------------------------------------------------
 -- Сессии пользователей
@@ -264,6 +285,93 @@ CREATE TABLE assignments (
 
 CREATE INDEX assignments_course_idx
 ON assignments (course_id);
+
+-- ------------------------------------------------------------
+-- Оцениваемые элементы журнала
+-- ------------------------------------------------------------
+CREATE TABLE grade_items (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  course_id BIGINT NOT NULL,
+  lesson_id BIGINT,
+  assignment_id BIGINT,
+
+  title VARCHAR(255) NOT NULL,
+  item_type VARCHAR(50) NOT NULL,
+  grade_date DATE NOT NULL,
+  max_score NUMERIC(6,2) NOT NULL DEFAULT 5,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_grade_item_course
+    FOREIGN KEY (course_id)
+    REFERENCES courses(id)
+    ON DELETE CASCADE,
+
+  CONSTRAINT fk_grade_item_lesson
+    FOREIGN KEY (lesson_id)
+    REFERENCES lessons(id)
+    ON DELETE SET NULL,
+
+  CONSTRAINT fk_grade_item_assignment
+    FOREIGN KEY (assignment_id)
+    REFERENCES assignments(id)
+    ON DELETE SET NULL,
+
+  CONSTRAINT grade_item_max_score_check
+    CHECK (max_score > 0),
+
+  CONSTRAINT grade_item_assignment_unique
+    UNIQUE (assignment_id)
+);
+
+CREATE INDEX grade_items_course_date_idx
+ON grade_items (course_id, grade_date);
+
+CREATE INDEX grade_items_lesson_idx
+ON grade_items (lesson_id);
+
+-- ------------------------------------------------------------
+-- Оценки студентов
+-- ------------------------------------------------------------
+CREATE TABLE grades (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  grade_item_id BIGINT NOT NULL,
+  student_id BIGINT NOT NULL,
+  score NUMERIC(6,2) NOT NULL,
+  comment TEXT,
+  graded_by BIGINT NOT NULL,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_grade_item
+    FOREIGN KEY (grade_item_id)
+    REFERENCES grade_items(id)
+    ON DELETE CASCADE,
+
+  CONSTRAINT fk_grade_student
+    FOREIGN KEY (student_id)
+    REFERENCES student_profiles(user_id)
+    ON DELETE CASCADE,
+
+  CONSTRAINT fk_grade_teacher
+    FOREIGN KEY (graded_by)
+    REFERENCES users(id),
+
+  CONSTRAINT grade_score_check
+    CHECK (score >= 0),
+
+  CONSTRAINT grade_unique
+    UNIQUE (grade_item_id, student_id)
+);
+
+CREATE INDEX grades_student_idx
+ON grades (student_id);
+
+CREATE INDEX grades_item_idx
+ON grades (grade_item_id);
 
 -- ------------------------------------------------------------
 -- Файлы учебных заданий
