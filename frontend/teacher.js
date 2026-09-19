@@ -84,6 +84,7 @@ const gradeItemTitle = document.getElementById("gradeItemTitle");
 const gradeItemType = document.getElementById("gradeItemType");
 const gradeItemMaxScore = document.getElementById("gradeItemMaxScore");
 const gradeItemsList = document.getElementById("gradeItemsList");
+const assignmentGradeDate = document.getElementById("assignmentGradeDate");
 
 let selectedSubmissionId = null;
 let selectedSubmissionMaxScore = null;
@@ -396,6 +397,7 @@ assignmentForm.addEventListener("submit", async (event) => {
       body: JSON.stringify({
         title: assignmentTitle.value,
         description: assignmentDescription.value,
+        gradeDate: assignmentGradeDate.value,
         deadline,
         maxScore: assignmentMaxScore.value
       })
@@ -751,6 +753,9 @@ async function loadAssignments(courseId, courseName = "") {
       submissionsButton.textContent = "Работы студентов";
       submissionsButton.addEventListener("click", async () => { await loadSubmissions(assignment.id, assignment.title); });
 
+      const gradeDateElement = document.createElement("p");
+      gradeDateElement.textContent = assignment.grade_date ? `Дата в журнале: ${assignment.grade_date.split("-").reverse().join(".")}` : "Дата в журнале: не назначена";
+
       container.appendChild(titleElement);
       container.appendChild(statusElement);
       container.appendChild(scoreElement);
@@ -759,6 +764,7 @@ async function loadAssignments(courseId, courseName = "") {
       container.appendChild(publicationButton);
       container.appendChild(filesButton);
       container.appendChild(submissionsButton);
+      container.appendChild(gradeDateElement);
       assignmentsList.appendChild(container);
     }
   } catch (error) {

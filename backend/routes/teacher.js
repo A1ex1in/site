@@ -676,19 +676,21 @@ router.get("/courses/:id/assignments",requireAuth,requireTeacher,async (request,
     }
     const result = await pool.query(`
       SELECT
-        id,
-        course_id,
-        title,
-        description,
-        deadline,
-        max_score,
-        is_published,
-        published_at,
-        created_at,
-        updated_at
-      FROM assignments
-      WHERE course_id = $1
-      ORDER BY created_at DESC, id DESC
+        a.id,
+        a.course_id,
+        a.title,
+        a.description,
+        a.deadline,
+        a.max_score,
+        a.is_published,
+        a.published_at,
+        a.created_at,
+        a.updated_at,
+        gi.grade_date::text AS grade_date
+      FROM assignments a
+      LEFT JOIN grade_items gi ON gi.assignment_id = a.id
+      WHERE a.course_id = $1
+      ORDER BY a.created_at DESC, a.id DESC
     `,[courseId]);
     response.json(result.rows);
   } catch (error) {
@@ -699,22 +701,47 @@ router.get("/courses/:id/assignments",requireAuth,requireTeacher,async (request,
 
 // Создать учебное задание
 router.post("/courses/:id/assignments",requireAuth,requireTeacher,async (request, response) => {
+  let client;
+
   try {
     const courseId = request.params.id;
-    const { title, description, deadline, maxScore } = request.body;
+    const { title, description, gradeDate, deadline, maxScore } = request.body;
+
     if (!/^\d+$/.test(courseId)) {
       return response.status(400).json({ error: "Некорректный идентификатор курса" });
     }
+
     const normalizedTitle = typeof title === "string" ? title.trim() : "";
     const normalizedDescription = typeof description === "string" ? description.trim() : "";
-    if (!normalizedTitle) {
+    const normalizedGradeDate = typeof gradeDate === "string" ? gradeDate.trim() : "";
+
+    if (!normalizedTitle || normalizedTitle.length > 255) {
       return response.status(400).json({ error: "Необходимо указать название задания" });
     }
-    const normalizedMaxScore = maxScore === undefined || maxScore === "" ? 5 : Number(maxScore);
-    if (!Number.isFinite(normalizedMaxScore) || normalizedMaxScore <= 0) {
-      return response.status(400).json({ error: "Максимальный балл должен быть больше нуля" });
+
+    // Проверка даты в журнале
+    const parsedDate = new Date(`${normalizedGradeDate}T00:00:00Z`);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedGradeDate) ||
+        Number.isNaN(parsedDate.getTime()) ||
+        parsedDate.toISOString().slice(0,10) !== normalizedGradeDate) {
+      return response.status(400).json({ error: "Некорректная дата в журнале" });
     }
+
+    // Проверка максимального балла
+    const maxScoreText = maxScore === undefined || maxScore === "" ? "5" : String(maxScore).trim();
+
+    if (!/^\d{1,4}(\.\d{1,2})?$/.test(maxScoreText) ||
+        Number(maxScoreText) <= 0 ||
+        Number(maxScoreText) > 9999.99) {
+      return response.status(400).json({ error: "Некорректный максимальный балл" });
+    }
+
+    const normalizedMaxScore = Number(maxScoreText);
+
+    // Проверка срока выполнения
     let normalizedDeadline = null;
+
     if (deadline) {
       normalizedDeadline = new Date(deadline);
 
@@ -722,17 +749,26 @@ router.post("/courses/:id/assignments",requireAuth,requireTeacher,async (request
         return response.status(400).json({ error: "Некорректный срок выполнения задания" });
       }
     }
-    const courseResult = await pool.query(`
+
+    client = await pool.connect();
+    await client.query("BEGIN");
+
+    // Проверка принадлежности курса преподавателю
+    const courseResult = await client.query(`
       SELECT id
       FROM courses
       WHERE id = $1
         AND teacher_id = $2
         AND is_active = TRUE
     `,[courseId,request.user.id]);
+
     if (courseResult.rowCount === 0) {
+      await client.query("ROLLBACK");
       return response.status(404).json({ error: "Активный учебный курс не найден" });
     }
-    const result = await pool.query(`
+
+    // Создание задания
+    const assignmentResult = await client.query(`
       INSERT INTO assignments (
         course_id,
         title,
@@ -759,13 +795,54 @@ router.post("/courses/:id/assignments",requireAuth,requireTeacher,async (request
       normalizedDeadline,
       normalizedMaxScore
     ]);
+
+    const assignment = assignmentResult.rows[0];
+
+    // Создание связанного оцениваемого элемента
+    const gradeItemResult = await client.query(`
+      INSERT INTO grade_items (
+        course_id,
+        assignment_id,
+        title,
+        item_type,
+        grade_date,
+        max_score
+      )
+      VALUES ($1, $2, $3, 'assignment', $4, $5)
+      RETURNING
+        id,
+        course_id,
+        lesson_id,
+        assignment_id,
+        title,
+        item_type,
+        grade_date::text AS grade_date,
+        max_score
+    `,[
+      courseId,
+      assignment.id,
+      normalizedTitle,
+      normalizedGradeDate,
+      normalizedMaxScore
+    ]);
+
+    await client.query("COMMIT");
+
     response.status(201).json({
       message: "Задание создано",
-      assignment: result.rows[0]
+      assignment: {
+        ...assignment,
+        grade_date: gradeItemResult.rows[0].grade_date
+      },
+      gradeItem: gradeItemResult.rows[0]
     });
   } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(() => {});
+
     console.error("Ошибка создания задания:", error);
     response.status(500).json({ error: "Ошибка создания задания" });
+  } finally {
+    if (client) client.release();
   }
 });
 
@@ -1224,23 +1301,167 @@ router.patch("/submissions/:submissionId/return",requireAuth,requireTeacher,requ
 
 // Проверить и оценить работу
 router.patch("/submissions/:submissionId/grade",requireAuth,requireTeacher,requireTeacherSubmissionAccess,async (request, response) => {
+  let client;
+
   try {
     const { score, teacherComment } = request.body;
-    if (!["submitted","graded"].includes(request.submission.status)) {
-      return response.status(409).json({ error: "Эта работа недоступна для оценивания" });
-    }
-    const normalizedScore = Number(score);
-    const maxScore = Number(request.submission.max_score);
+
+    const scoreText = typeof score === "number" || typeof score === "string" ? String(score).trim() : "";
     const normalizedComment = typeof teacherComment === "string" ? teacherComment.trim() : "";
-    if (!Number.isFinite(normalizedScore) || normalizedScore < 0) {
+
+    if (!/^\d{1,4}(\.\d{1,2})?$/.test(scoreText)) {
       return response.status(400).json({ error: "Некорректный балл" });
     }
-    if (normalizedScore > maxScore) {
-      return response.status(400).json({
-        error: `Балл не может превышать максимальный балл задания: ${maxScore}`
+
+    const normalizedScore = Number(scoreText);
+
+    client = await pool.connect();
+    await client.query("BEGIN");
+
+    // Получить связанный элемент журнала
+    const itemResult = await client.query(`
+      SELECT
+        gi.id,
+        gi.grade_date::text AS grade_date,
+        gi.max_score,
+        a.max_score AS assignment_max_score,
+        c.id AS course_id,
+        c.group_id
+      FROM student_submissions ss
+      JOIN assignments a ON a.id = ss.assignment_id
+      JOIN courses c ON c.id = a.course_id
+      JOIN grade_items gi ON gi.assignment_id = a.id
+        AND gi.course_id = c.id
+        AND gi.item_type = 'assignment'
+      WHERE ss.id = $1
+        AND c.teacher_id = $2
+        AND c.is_active = TRUE
+    `,[request.submission.id,request.user.id]);
+
+    if (itemResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+
+      return response.status(409).json({
+        error: "Для задания не настроено оценивание в журнале или учебный курс неактивен"
       });
     }
-    const result = await pool.query(`
+
+    const item = itemResult.rows[0];
+
+    // Проверить согласованность максимального балла
+    if (Number(item.max_score) !== Number(item.assignment_max_score)) {
+      await client.query("ROLLBACK");
+
+      return response.status(409).json({
+        error: "Максимальный балл задания не совпадает с максимальным баллом в журнале"
+      });
+    }
+
+    if (normalizedScore > Number(item.max_score)) {
+      await client.query("ROLLBACK");
+
+      return response.status(400).json({
+        error: `Балл не может превышать максимальный балл задания: ${item.max_score}`
+      });
+    }
+
+    // Проверить студента и заблокировать его запись на время выставления оценки
+    const studentResult = await client.query(`
+      SELECT sp.user_id
+      FROM student_profiles sp
+      JOIN users u ON u.id = sp.user_id
+      WHERE sp.user_id = $1
+        AND sp.group_id = $2
+        AND u.role = 'student'
+        AND u.status IN ('active','blocked')
+      FOR UPDATE OF sp
+    `,[request.submission.student_id,item.group_id]);
+
+    if (studentResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+
+      return response.status(404).json({
+        error: "Студент не найден в группе учебного курса"
+      });
+    }
+
+    // Повторно проверить состояние работы внутри транзакции
+    const submissionResult = await client.query(`
+      SELECT id, assignment_id, student_id, status
+      FROM student_submissions
+      WHERE id = $1
+      FOR UPDATE
+    `,[request.submission.id]);
+
+    if (submissionResult.rowCount === 0 ||
+        !["submitted","graded"].includes(submissionResult.rows[0].status)) {
+      await client.query("ROLLBACK");
+
+      return response.status(409).json({
+        error: "Эта работа недоступна для оценивания"
+      });
+    }
+
+    // Проверить правило одной оценки за день
+    const existingResult = await client.query(`
+      SELECT gi.title
+      FROM grades g
+      JOIN grade_items gi ON gi.id = g.grade_item_id
+      WHERE g.student_id = $1
+        AND gi.course_id = $2
+        AND gi.grade_date = $3
+        AND gi.id <> $4
+      LIMIT 1
+    `,[
+      request.submission.student_id,
+      item.course_id,
+      item.grade_date,
+      item.id
+    ]);
+
+    if (existingResult.rowCount > 0) {
+      await client.query("ROLLBACK");
+
+      return response.status(409).json({
+        error: `У студента уже есть оценка за ${item.grade_date}: ${existingResult.rows[0].title}`
+      });
+    }
+
+    // Сохранить оценку в общей системе оценивания
+    const gradeResult = await client.query(`
+      INSERT INTO grades (
+        grade_item_id,
+        student_id,
+        score,
+        comment,
+        graded_by
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (grade_item_id, student_id)
+      DO UPDATE SET
+        score = EXCLUDED.score,
+        comment = EXCLUDED.comment,
+        graded_by = EXCLUDED.graded_by,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING
+        id,
+        grade_item_id,
+        student_id,
+        score,
+        comment,
+        graded_by,
+        created_at,
+        updated_at
+    `,[
+      item.id,
+      request.submission.student_id,
+      normalizedScore,
+      normalizedComment || null,
+      request.user.id
+    ]);
+
+    // Обновить состояние отправленной работы
+    const result = await client.query(`
       UPDATE student_submissions
       SET
         status = 'graded',
@@ -1265,13 +1486,21 @@ router.patch("/submissions/:submissionId/grade",requireAuth,requireTeacher,requi
       normalizedComment || null,
       request.submission.id
     ]);
+
+    await client.query("COMMIT");
+
     response.json({
       message: "Работа оценена",
-      submission: result.rows[0]
+      submission: result.rows[0],
+      grade: gradeResult.rows[0]
     });
   } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(() => {});
+
     console.error("Ошибка оценивания работы:", error);
     response.status(500).json({ error: "Ошибка оценивания работы" });
+  } finally {
+    if (client) client.release();
   }
 });
 
@@ -1333,9 +1562,15 @@ router.get("/courses/:id/journal",requireAuth,requireTeacher,async (request, res
         ss.assignment_id,
         ss.student_id,
         ss.status,
-        ss.score,
+
+        CASE
+          WHEN ss.status = 'graded' THEN g.score
+          ELSE NULL
+        END AS score,
+
         ss.submitted_at,
         ss.checked_at,
+
         CASE
           WHEN a.deadline IS NOT NULL
             AND ss.submitted_at IS NOT NULL
@@ -1343,8 +1578,20 @@ router.get("/courses/:id/journal",requireAuth,requireTeacher,async (request, res
           THEN TRUE
           ELSE FALSE
         END AS is_late
+
       FROM student_submissions ss
-      JOIN assignments a ON a.id = ss.assignment_id
+
+      JOIN assignments a
+        ON a.id = ss.assignment_id
+
+      LEFT JOIN grade_items gi
+        ON gi.assignment_id = a.id
+        AND gi.course_id = a.course_id
+
+      LEFT JOIN grades g
+        ON g.grade_item_id = gi.id
+        AND g.student_id = ss.student_id
+
       WHERE a.course_id = $1
     `,[courseId]);
     const submissionsByStudent = {};
