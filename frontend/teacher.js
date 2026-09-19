@@ -70,6 +70,20 @@ const gradeSubmissionButton = document.getElementById("gradeSubmissionButton");
 const journalSection = document.getElementById("journalSection");
 const journalTitle = document.getElementById("journalTitle");
 const journalContainer = document.getElementById("journalContainer");
+const courseLessonsSection = document.getElementById("courseLessonsSection");
+const courseLessonsTitle = document.getElementById("courseLessonsTitle");
+const lessonForm = document.getElementById("lessonForm");
+const lessonDate = document.getElementById("lessonDate");
+const lessonType = document.getElementById("lessonType");
+const lessonTopic = document.getElementById("lessonTopic");
+const lessonsList = document.getElementById("lessonsList");
+const gradeItemsSection = document.getElementById("gradeItemsSection");
+const gradeItemsTitle = document.getElementById("gradeItemsTitle");
+const gradeItemForm = document.getElementById("gradeItemForm");
+const gradeItemTitle = document.getElementById("gradeItemTitle");
+const gradeItemType = document.getElementById("gradeItemType");
+const gradeItemMaxScore = document.getElementById("gradeItemMaxScore");
+const gradeItemsList = document.getElementById("gradeItemsList");
 
 let selectedSubmissionId = null;
 let selectedSubmissionMaxScore = null;
@@ -86,6 +100,10 @@ let selectedAssignmentId = null;
 let selectedAssignmentTitle = "";
 let selectedSubmissionsAssignmentId = null;
 let selectedSubmissionsAssignmentTitle = "";
+let selectedLessonsCourseId = null;
+let selectedLessonsCourseName = "";
+let selectedLessonId = null;
+let selectedLessonTitle = "";
 
 materialForm.addEventListener("submit",async (event) => {
   event.preventDefault();
@@ -498,6 +516,87 @@ gradeSubmissionButton.addEventListener("click", async () => {
   }
 });
 
+lessonForm.addEventListener("submit",async (event) => {
+  event.preventDefault();
+
+  if (!selectedLessonsCourseId) {
+    message.textContent = "Сначала выберите учебный курс.";
+    return;
+  }
+
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/courses/${selectedLessonsCourseId}/lessons`,{
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        lessonDate: lessonDate.value,
+        lessonType: lessonType.value,
+        topic: lessonTopic.value
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка создания занятия.";
+      return;
+    }
+
+    message.textContent = data.message;
+
+    lessonForm.reset();
+
+    await loadLessons(selectedLessonsCourseId,selectedLessonsCourseName);
+  } catch (error) {
+    console.error("Ошибка создания занятия:", error);
+    message.textContent = "Не удалось создать занятие.";
+  }
+});
+
+gradeItemForm.addEventListener("submit",async (event) => {
+  event.preventDefault();
+
+  if (!selectedLessonId) {
+    message.textContent = "Сначала выберите занятие.";
+    return;
+  }
+
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/lessons/${selectedLessonId}/grade-items`,{
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        title: gradeItemTitle.value,
+        itemType: gradeItemType.value,
+        maxScore: Number(gradeItemMaxScore.value)
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка создания оценивания.";
+      return;
+    }
+
+    message.textContent = data.message;
+
+    gradeItemForm.reset();
+    gradeItemMaxScore.value = "5";
+
+    await loadGradeItems(selectedLessonId,selectedLessonTitle);
+  } catch (error) {
+    console.error("Ошибка создания оценивания:", error);
+    message.textContent = "Не удалось создать оценивание.";
+  }
+});
+
 async function loadMaterials(courseId, courseName = "") {
   try {
     const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/materials`,{
@@ -579,13 +678,18 @@ async function loadCourses() {
 
       const journalButton = document.createElement("button");
       journalButton.textContent = "Журнал";
-      journalButton.addEventListener("click",async () => { await loadJournal(course.id,`${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`); });
+      journalButton.addEventListener("click", async () => { await loadJournal(course.id, `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`); });
+
+      const lessonsButton = document.createElement("button");
+      lessonsButton.textContent = "Занятия";
+      lessonsButton.addEventListener("click", async () => { await loadLessons(course.id, `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`); });
 
       container.appendChild(disciplineElement);
       container.appendChild(infoElement);
       container.appendChild(openButton);
       container.appendChild(assignmentsButton);
       container.appendChild(journalButton);
+      container.appendChild(lessonsButton);
       coursesList.appendChild(container);
     }
   } catch (error) {
@@ -1183,12 +1287,19 @@ async function loadJournal(courseId, courseName = "") {
     journalSection.hidden = false;
     journalTitle.textContent = `Электронный журнал: ${courseName}`;
     journalContainer.innerHTML = "";
+    const manualGradeItems = data.gradeItems.filter(item => item.assignment_id === null);
+
+    const gradesByStudent = new Map();
+
+    for (const grade of data.grades) {
+      gradesByStudent.set(`${grade.student_id}:${grade.grade_item_id}`,grade);
+    }
     if (data.students.length === 0) {
       journalContainer.textContent = "В группе пока нет студентов.";
       return;
     }
-    if (data.assignments.length === 0) {
-      journalContainer.textContent = "В учебном курсе пока нет заданий.";
+    if (data.assignments.length === 0 && manualGradeItems.length === 0) {
+      journalContainer.textContent = "В учебном курсе пока нет оцениваний.";
       return;
     }
     const table = document.createElement("table");
@@ -1215,6 +1326,24 @@ async function loadJournal(courseId, courseName = "") {
       }
       headerRow.appendChild(assignmentHeader);
     }
+    for (const item of manualGradeItems) {
+      const itemHeader = document.createElement("th");
+
+      const dateElement = document.createElement("div");
+      dateElement.textContent = item.grade_date.split("-").reverse().join(".");
+
+      const titleElement = document.createElement("div");
+      titleElement.textContent = item.title;
+
+      const maxScoreElement = document.createElement("small");
+      maxScoreElement.textContent = `Макс.: ${item.max_score}`;
+
+      itemHeader.appendChild(dateElement);
+      itemHeader.appendChild(titleElement);
+      itemHeader.appendChild(maxScoreElement);
+
+      headerRow.appendChild(itemHeader);
+    }
     thead.appendChild(headerRow);
     table.appendChild(thead);
     const tbody = document.createElement("tbody");
@@ -1237,6 +1366,19 @@ async function loadJournal(courseId, courseName = "") {
         cell.textContent = getJournalCellText(submission,assignment);
         row.appendChild(cell);
       }
+      for (const item of manualGradeItems) {
+        const cell = document.createElement("td");
+
+        const grade = gradesByStudent.get(`${student.id}:${item.id}`);
+
+        cell.textContent = grade ? `${grade.score} / ${item.max_score}` : "—";
+
+        if (grade?.comment) {
+          cell.title = grade.comment;
+        }
+
+        row.appendChild(cell);
+      }
       tbody.appendChild(row);
     }
     table.appendChild(tbody);
@@ -1244,6 +1386,593 @@ async function loadJournal(courseId, courseName = "") {
   } catch (error) {
     console.error("Ошибка загрузки электронного журнала:", error);
     message.textContent = "Не удалось загрузить электронный журнал.";
+  }
+}
+
+async function loadLessons(courseId, courseName = "") {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/lessons`,{
+      credentials: "include"
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка получения занятий.";
+      return;
+    }
+
+    selectedLessonsCourseId = courseId;
+    selectedLessonsCourseName = courseName;
+
+    journalSection.hidden = true;
+    gradeItemsSection.hidden = true;
+    courseLessonsSection.hidden = false;
+
+    courseLessonsTitle.textContent = `Занятия курса: ${courseName}`;
+    lessonsList.innerHTML = "";
+
+    if (data.length === 0) {
+      lessonsList.textContent = "Занятия пока не созданы.";
+      return;
+    }
+
+    const lessonTypeLabels = {
+      lecture: "Лекция",
+      practical: "Практическое занятие",
+      laboratory: "Лабораторная работа",
+      test: "Тестирование",
+      other: "Другое"
+    };
+
+    for (const lesson of data) {
+      const container = document.createElement("div");
+
+      const dateElement = document.createElement("strong");
+      dateElement.textContent = lesson.lesson_date.split("-").reverse().join(".");
+
+      const typeElement = document.createElement("span");
+      typeElement.textContent = ` — ${lessonTypeLabels[lesson.lesson_type] || lesson.lesson_type}`;
+
+      const topicElement = document.createElement("span");
+      topicElement.textContent = ` — ${lesson.topic || "Тема не указана"}`;
+
+      // Кнопка оцениваний
+      const gradeItemsButton = document.createElement("button");
+      gradeItemsButton.type = "button";
+      gradeItemsButton.textContent = "Оценивания";
+
+      gradeItemsButton.addEventListener("click",async () => {
+        const lessonTitle = `${lesson.lesson_date.split("-").reverse().join(".")} — ${lesson.topic || "Без темы"}`;
+        await loadGradeItems(lesson.id,lessonTitle);
+      });
+
+      // Кнопка изменения занятия
+      const editButton = document.createElement("button");
+      editButton.type = "button";
+      editButton.textContent = "Изменить";
+
+      // Кнопка удаления занятия
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.textContent = "Удалить";
+
+      // Форма редактирования
+      const editForm = document.createElement("form");
+      editForm.hidden = true;
+
+      const dateLabel = document.createElement("label");
+      dateLabel.textContent = "Дата занятия";
+
+      const dateInput = document.createElement("input");
+      dateInput.type = "date";
+      dateInput.value = lesson.lesson_date;
+      dateInput.required = true;
+
+      const typeLabel = document.createElement("label");
+      typeLabel.textContent = "Вид занятия";
+
+      const typeSelect = document.createElement("select");
+      typeSelect.required = true;
+
+      for (const [value, label] of Object.entries(lessonTypeLabels)) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        typeSelect.appendChild(option);
+      }
+
+      if (!lessonTypeLabels[lesson.lesson_type]) {
+        const option = document.createElement("option");
+        option.value = lesson.lesson_type;
+        option.textContent = lesson.lesson_type;
+        typeSelect.appendChild(option);
+      }
+
+      typeSelect.value = lesson.lesson_type;
+
+      const topicLabel = document.createElement("label");
+      topicLabel.textContent = "Тема занятия";
+
+      const topicInput = document.createElement("input");
+      topicInput.type = "text";
+      topicInput.value = lesson.topic || "";
+      topicInput.maxLength = 255;
+
+      const saveButton = document.createElement("button");
+      saveButton.type = "submit";
+      saveButton.textContent = "Сохранить";
+
+      const cancelButton = document.createElement("button");
+      cancelButton.type = "button";
+      cancelButton.textContent = "Отмена";
+
+      dateLabel.appendChild(dateInput);
+      typeLabel.appendChild(typeSelect);
+      topicLabel.appendChild(topicInput);
+
+      editForm.appendChild(dateLabel);
+      editForm.appendChild(typeLabel);
+      editForm.appendChild(topicLabel);
+      editForm.appendChild(saveButton);
+      editForm.appendChild(cancelButton);
+
+      // Открытие формы изменения
+      editButton.addEventListener("click",() => {
+        editForm.hidden = !editForm.hidden;
+      });
+
+      // Отмена изменения
+      cancelButton.addEventListener("click",() => {
+        editForm.hidden = true;
+      });
+
+      // Сохранение изменений занятия
+      editForm.addEventListener("submit",async (event) => {
+        event.preventDefault();
+
+        saveButton.disabled = true;
+
+        try {
+          const response = await fetch(`${apiUrl}/api/teacher/lessons/${lesson.id}`,{
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              lessonDate: dateInput.value,
+              lessonType: typeSelect.value,
+              topic: topicInput.value.trim()
+            })
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            message.textContent = result.error || "Ошибка изменения занятия.";
+            return;
+          }
+
+          await loadLessons(courseId,courseName);
+
+          message.textContent = result.message;
+        } catch (error) {
+          console.error("Ошибка изменения занятия:", error);
+          message.textContent = "Не удалось изменить занятие.";
+        } finally {
+          saveButton.disabled = false;
+        }
+      });
+
+      // Удаление занятия
+      deleteButton.addEventListener("click",async () => {
+        const confirmed = window.confirm(
+          `Удалить занятие от ${lesson.lesson_date.split("-").reverse().join(".")} «${lesson.topic || "Без темы"}»?`
+        );
+
+        if (!confirmed) return;
+
+        deleteButton.disabled = true;
+
+        try {
+          const response = await fetch(`${apiUrl}/api/teacher/lessons/${lesson.id}`,{
+            method: "DELETE",
+            credentials: "include"
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            message.textContent = result.error || "Ошибка удаления занятия.";
+            return;
+          }
+
+          await loadLessons(courseId,courseName);
+
+          message.textContent = result.message;
+        } catch (error) {
+          console.error("Ошибка удаления занятия:", error);
+          message.textContent = "Не удалось удалить занятие.";
+        } finally {
+          deleteButton.disabled = false;
+        }
+      });
+
+      container.appendChild(dateElement);
+      container.appendChild(typeElement);
+      container.appendChild(topicElement);
+      container.appendChild(gradeItemsButton);
+      container.appendChild(editButton);
+      container.appendChild(deleteButton);
+      container.appendChild(editForm);
+
+      lessonsList.appendChild(container);
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки занятий:", error);
+    message.textContent = "Не удалось загрузить занятия.";
+  }
+}
+
+async function loadGradeItems(lessonId, lessonTitle = "") {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/lessons/${lessonId}/grade-items`,{
+      credentials: "include"
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка получения оцениваний.";
+      return;
+    }
+
+    selectedLessonId = lessonId;
+    selectedLessonTitle = lessonTitle;
+
+    gradeItemsSection.hidden = false;
+    gradeItemsTitle.textContent = `Оценивания: ${lessonTitle}`;
+    gradeItemsList.innerHTML = "";
+
+    if (data.length === 0) {
+      gradeItemsList.textContent = "Оценивания пока не созданы.";
+      return;
+    }
+
+    const itemTypeLabels = {
+      answer: "Ответ по теме",
+      practical: "Практическая работа",
+      laboratory: "Лабораторная работа",
+      test: "Тестирование",
+      other: "Другое"
+    };
+
+    for (const item of data) {
+      const container = document.createElement("div");
+
+      const titleElement = document.createElement("strong");
+      titleElement.textContent = item.title;
+
+      const typeElement = document.createElement("span");
+      typeElement.textContent = ` — ${itemTypeLabels[item.item_type] || item.item_type}`;
+
+      const scoreElement = document.createElement("span");
+      scoreElement.textContent = ` — максимум: ${item.max_score}`;
+
+      // Кнопка изменения
+      const editButton = document.createElement("button");
+      editButton.textContent = "Изменить";
+      editButton.type = "button";
+
+      // Кнопка удаления
+      const deleteButton = document.createElement("button");
+      deleteButton.textContent = "Удалить";
+      deleteButton.type = "button";
+
+      // Кнопка выставления оценок
+      const gradesButton = document.createElement("button");
+      gradesButton.type = "button";
+      gradesButton.textContent = "Оценки";
+
+      // Контейнер для списка студентов и оценок
+      const gradesPanel = document.createElement("div");
+      gradesPanel.hidden = true;
+      gradesButton.addEventListener("click",async () => {
+        if (!gradesPanel.hidden) {
+          gradesPanel.hidden = true;
+          return;
+        }
+        gradesPanel.hidden = false;
+        await loadGradeItemGrades(item,gradesPanel);
+      });
+
+      // Форма редактирования
+      const editForm = document.createElement("form");
+      editForm.hidden = true;
+
+      const titleInput = document.createElement("input");
+      titleInput.type = "text";
+      titleInput.value = item.title;
+      titleInput.maxLength = 255;
+      titleInput.required = true;
+
+      const typeSelect = document.createElement("select");
+      typeSelect.required = true;
+
+      for (const [value, label] of Object.entries(itemTypeLabels)) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        typeSelect.appendChild(option);
+      }
+
+      // Сохраняем возможность редактировать пользовательский тип
+      if (!itemTypeLabels[item.item_type]) {
+        const option = document.createElement("option");
+        option.value = item.item_type;
+        option.textContent = item.item_type;
+        typeSelect.appendChild(option);
+      }
+
+      typeSelect.value = item.item_type;
+
+      const maxScoreInput = document.createElement("input");
+      maxScoreInput.type = "number";
+      maxScoreInput.min = "0.01";
+      maxScoreInput.max = "9999.99";
+      maxScoreInput.step = "0.01";
+      maxScoreInput.value = item.max_score;
+      maxScoreInput.required = true;
+
+      const saveButton = document.createElement("button");
+      saveButton.type = "submit";
+      saveButton.textContent = "Сохранить";
+
+      const cancelButton = document.createElement("button");
+      cancelButton.type = "button";
+      cancelButton.textContent = "Отмена";
+
+      editForm.appendChild(titleInput);
+      editForm.appendChild(typeSelect);
+      editForm.appendChild(maxScoreInput);
+      editForm.appendChild(saveButton);
+      editForm.appendChild(cancelButton);
+
+      // Открытие формы редактирования
+      editButton.addEventListener("click",() => {
+        editForm.hidden = !editForm.hidden;
+      });
+
+      // Отмена редактирования
+      cancelButton.addEventListener("click",() => {
+        editForm.hidden = true;
+      });
+
+      // Сохранение изменений
+      editForm.addEventListener("submit",async (event) => {
+        event.preventDefault();
+
+        saveButton.disabled = true;
+
+        try {
+          const response = await fetch(`${apiUrl}/api/teacher/grade-items/${item.id}`,{
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              title: titleInput.value.trim(),
+              itemType: typeSelect.value,
+              maxScore: Number(maxScoreInput.value)
+            })
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            message.textContent = result.error || "Ошибка изменения оценивания.";
+            return;
+          }
+
+          await loadGradeItems(selectedLessonId,selectedLessonTitle);
+
+          message.textContent = result.message;
+        } catch (error) {
+          console.error("Ошибка изменения оценивания:", error);
+          message.textContent = "Не удалось изменить оценивание.";
+        } finally {
+          saveButton.disabled = false;
+        }
+      });
+
+      // Удаление оценивания
+      deleteButton.addEventListener("click",async () => {
+        const confirmed = window.confirm(`Удалить оценивание «${item.title}»?`);
+
+        if (!confirmed) return;
+
+        deleteButton.disabled = true;
+
+        try {
+          const response = await fetch(`${apiUrl}/api/teacher/grade-items/${item.id}`,{
+            method: "DELETE",
+            credentials: "include"
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            message.textContent = result.error || "Ошибка удаления оценивания.";
+            return;
+          }
+
+          await loadGradeItems(selectedLessonId,selectedLessonTitle);
+
+          message.textContent = result.message;
+        } catch (error) {
+          console.error("Ошибка удаления оценивания:", error);
+          message.textContent = "Не удалось удалить оценивание.";
+        } finally {
+          deleteButton.disabled = false;
+        }
+      });
+
+      container.appendChild(titleElement);
+      container.appendChild(typeElement);
+      container.appendChild(scoreElement);
+      container.appendChild(gradesButton);
+      container.appendChild(editButton);
+      container.appendChild(deleteButton);
+      container.appendChild(editForm);
+      container.appendChild(gradesPanel);
+
+      gradeItemsList.appendChild(container);
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки оцениваний:", error);
+    message.textContent = "Не удалось загрузить оценивания.";
+  }
+}
+
+async function loadGradeItemGrades(item, panel) {
+  try {
+    panel.textContent = "Загрузка студентов...";
+
+    const response = await fetch(`${apiUrl}/api/teacher/courses/${item.course_id}/journal`,{
+      credentials: "include"
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      panel.textContent = data.error || "Ошибка получения студентов.";
+      return;
+    }
+
+    panel.innerHTML = "";
+
+    const titleElement = document.createElement("h3");
+    titleElement.textContent = `Оценки: ${item.title}`;
+
+    const dateElement = document.createElement("p");
+    dateElement.textContent = `Дата: ${item.grade_date.split("-").reverse().join(".")} — максимум: ${item.max_score}`;
+
+    panel.appendChild(titleElement);
+    panel.appendChild(dateElement);
+
+    if (data.students.length === 0) {
+      panel.append("В группе пока нет студентов.");
+      return;
+    }
+
+    const gradesByStudent = new Map();
+
+    for (const grade of data.grades) {
+      if (String(grade.grade_item_id) === String(item.id)) {
+        gradesByStudent.set(String(grade.student_id),grade);
+      }
+    }
+
+    for (const student of data.students) {
+      const grade = gradesByStudent.get(String(student.id));
+
+      const row = document.createElement("div");
+
+      const fullName = [
+        student.last_name,
+        student.first_name,
+        student.middle_name
+      ].filter(Boolean).join(" ");
+
+      const studentElement = document.createElement("strong");
+      studentElement.textContent = `${fullName} — ${student.student_number || "Без номера"}`;
+
+      const gradeForm = document.createElement("form");
+
+      const scoreLabel = document.createElement("label");
+      scoreLabel.textContent = "Балл: ";
+
+      const scoreInput = document.createElement("input");
+      scoreInput.type = "number";
+      scoreInput.min = "0";
+      scoreInput.max = item.max_score;
+      scoreInput.step = "0.01";
+      scoreInput.value = grade ? grade.score : "";
+      scoreInput.required = true;
+
+      const commentLabel = document.createElement("label");
+      commentLabel.textContent = "Комментарий: ";
+
+      const commentInput = document.createElement("input");
+      commentInput.type = "text";
+      commentInput.value = grade?.comment || "";
+
+      const saveButton = document.createElement("button");
+      saveButton.type = "submit";
+      saveButton.textContent = grade ? "Изменить оценку" : "Сохранить оценку";
+
+      const statusElement = document.createElement("span");
+
+      scoreLabel.appendChild(scoreInput);
+      commentLabel.appendChild(commentInput);
+
+      gradeForm.appendChild(scoreLabel);
+      gradeForm.appendChild(commentLabel);
+      gradeForm.appendChild(saveButton);
+
+      row.appendChild(studentElement);
+      row.appendChild(gradeForm);
+      row.appendChild(statusElement);
+
+      panel.appendChild(row);
+
+      gradeForm.addEventListener("submit",async (event) => {
+        event.preventDefault();
+
+        if (scoreInput.value.trim() === "") {
+          statusElement.textContent = "Укажи балл.";
+          return;
+        }
+
+        saveButton.disabled = true;
+        statusElement.textContent = "";
+
+        try {
+          const response = await fetch(`${apiUrl}/api/teacher/grade-items/${item.id}/students/${student.id}/grade`,{
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              score: Number(scoreInput.value),
+              comment: commentInput.value.trim()
+            })
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            statusElement.textContent = result.error || "Ошибка сохранения оценки.";
+            return;
+          }
+
+          message.textContent = result.message;
+
+          await loadGradeItemGrades(item,panel);
+        } catch (error) {
+          console.error("Ошибка сохранения оценки:", error);
+          statusElement.textContent = "Не удалось сохранить оценку.";
+        } finally {
+          saveButton.disabled = false;
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки оценок:", error);
+    panel.textContent = "Не удалось загрузить оценки студентов.";
   }
 }
 

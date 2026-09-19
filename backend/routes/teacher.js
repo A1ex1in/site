@@ -1365,10 +1365,48 @@ router.get("/courses/:id/journal",requireAuth,requireTeacher,async (request, res
       ...student,
       submissions: submissionsByStudent[student.id] || {}
     }));
+    // Получить оцениваемые элементы курса
+    const gradeItemsResult = await pool.query(`
+      SELECT
+        gi.id,
+        gi.course_id,
+        gi.lesson_id,
+        gi.assignment_id,
+        gi.title,
+        gi.item_type,
+        gi.grade_date::text AS grade_date,
+        gi.max_score,
+        gi.sort_order,
+        l.lesson_type,
+        l.topic AS lesson_topic
+      FROM grade_items gi
+      LEFT JOIN lessons l ON l.id = gi.lesson_id
+      WHERE gi.course_id = $1
+      ORDER BY gi.grade_date, gi.sort_order, gi.id
+    `,[courseId]);
+
+    // Получить оценки студентов
+    const gradesResult = await pool.query(`
+      SELECT
+        g.id,
+        g.grade_item_id,
+        g.student_id,
+        g.score,
+        g.comment,
+        g.graded_by,
+        g.created_at,
+        g.updated_at
+      FROM grades g
+      JOIN grade_items gi ON gi.id = g.grade_item_id
+      WHERE gi.course_id = $1
+      ORDER BY gi.grade_date, gi.sort_order, gi.id, g.student_id
+    `,[courseId]);
     response.json({
       course,
       assignments: assignmentsResult.rows,
-      students
+      students,
+      gradeItems: gradeItemsResult.rows,
+      grades: gradesResult.rows
     });
   } catch (error) {
     console.error("Ошибка получения электронного журнала:", error);
@@ -1455,6 +1493,700 @@ router.get("/courses/:id/lessons",requireAuth,requireTeacher,async (request, res
   } catch (error) {
     console.error("Ошибка получения занятий курса:", error);
     response.status(500).json({ error: "Ошибка получения занятий курса" });
+  }
+});
+
+// Создать оцениваемый элемент занятия
+router.post("/lessons/:lessonId/grade-items",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const lessonId = request.params.lessonId;
+    const { title, itemType, maxScore } = request.body;
+
+    if (!/^\d+$/.test(lessonId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор занятия" });
+    }
+
+    const normalizedTitle = typeof title === "string" ? title.trim() : "";
+    const normalizedType = typeof itemType === "string" ? itemType.trim() : "";
+    const normalizedMaxScore = maxScore === undefined ? 5 : Number(maxScore);
+
+    if (!normalizedTitle || normalizedTitle.length > 255) {
+      return response.status(400).json({ error: "Необходимо указать название оценивания" });
+    }
+
+    if (!normalizedType || normalizedType.length > 50) {
+      return response.status(400).json({ error: "Необходимо указать тип оценивания" });
+    }
+
+    if (!Number.isFinite(normalizedMaxScore) || normalizedMaxScore <= 0) {
+      return response.status(400).json({ error: "Некорректный максимальный балл" });
+    }
+
+    const lessonResult = await pool.query(`
+      SELECT
+        l.id,
+        l.course_id,
+        l.lesson_date::text AS lesson_date
+      FROM lessons l
+      JOIN courses c ON c.id = l.course_id
+      WHERE l.id = $1
+        AND c.teacher_id = $2
+        AND c.is_active = TRUE
+    `,[lessonId,request.user.id]);
+
+    if (lessonResult.rowCount === 0) {
+      return response.status(404).json({ error: "Занятие не найдено" });
+    }
+
+    const lesson = lessonResult.rows[0];
+
+    const result = await pool.query(`
+      INSERT INTO grade_items (
+        course_id,
+        lesson_id,
+        title,
+        item_type,
+        grade_date,
+        max_score
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING
+        id,
+        course_id,
+        lesson_id,
+        assignment_id,
+        title,
+        item_type,
+        grade_date::text AS grade_date,
+        max_score,
+        sort_order,
+        created_at,
+        updated_at
+    `,[
+      lesson.course_id,
+      lesson.id,
+      normalizedTitle,
+      normalizedType,
+      lesson.lesson_date,
+      normalizedMaxScore
+    ]);
+
+    response.status(201).json({
+      message: "Оцениваемый элемент создан",
+      gradeItem: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Ошибка создания оцениваемого элемента:", error);
+    response.status(500).json({ error: "Ошибка создания оцениваемого элемента" });
+  }
+});
+
+// Получить оцениваемые элементы занятия
+router.get("/lessons/:lessonId/grade-items",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const lessonId = request.params.lessonId;
+
+    if (!/^\d+$/.test(lessonId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор занятия" });
+    }
+
+    const lessonResult = await pool.query(`
+      SELECT l.id
+      FROM lessons l
+      JOIN courses c ON c.id = l.course_id
+      WHERE l.id = $1
+        AND c.teacher_id = $2
+    `,[lessonId,request.user.id]);
+
+    if (lessonResult.rowCount === 0) {
+      return response.status(404).json({ error: "Занятие не найдено" });
+    }
+
+    const result = await pool.query(`
+      SELECT
+        id,
+        course_id,
+        lesson_id,
+        assignment_id,
+        title,
+        item_type,
+        grade_date::text AS grade_date,
+        max_score,
+        sort_order,
+        created_at,
+        updated_at
+      FROM grade_items
+      WHERE lesson_id = $1
+      ORDER BY sort_order, id
+    `,[lessonId]);
+
+    response.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка получения оцениваемых элементов:", error);
+    response.status(500).json({ error: "Ошибка получения оцениваемых элементов" });
+  }
+});
+
+// Выставить или изменить оценку студента
+router.put("/grade-items/:gradeItemId/students/:studentId/grade",requireAuth,requireTeacher,async (request, response) => {
+  let client;
+
+  try {
+    const { gradeItemId, studentId } = request.params;
+    const { score, comment } = request.body;
+
+    if (!/^\d+$/.test(gradeItemId) || !/^\d+$/.test(studentId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор" });
+    }
+
+    const scoreText = typeof score === "number" || typeof score === "string" ? String(score).trim() : "";
+
+    if (!/^(0|[1-9]\d*)(\.\d{1,2})?$/.test(scoreText)) {
+      return response.status(400).json({ error: "Некорректный балл" });
+    }
+
+    const normalizedScore = Number(scoreText);
+    const normalizedComment = typeof comment === "string" ? comment.trim() : "";
+
+    client = await pool.connect();
+    await client.query("BEGIN");
+
+    const itemResult = await client.query(`
+      SELECT
+        gi.id,
+        gi.course_id,
+        gi.assignment_id,
+        gi.grade_date::text AS grade_date,
+        gi.max_score,
+        c.group_id
+      FROM grade_items gi
+      JOIN courses c ON c.id = gi.course_id
+      WHERE gi.id = $1
+        AND c.teacher_id = $2
+        AND c.is_active = TRUE
+    `,[gradeItemId,request.user.id]);
+
+    if (itemResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return response.status(404).json({ error: "Оцениваемый элемент не найден" });
+    }
+
+    const item = itemResult.rows[0];
+
+    if (item.assignment_id !== null) {
+      await client.query("ROLLBACK");
+      return response.status(409).json({ error: "Оценка за онлайн-задание выставляется при проверке работы" });
+    }
+
+    if (normalizedScore > Number(item.max_score)) {
+      await client.query("ROLLBACK");
+      return response.status(400).json({ error: `Балл не может превышать ${item.max_score}` });
+    }
+
+    const studentResult = await client.query(`
+      SELECT sp.user_id
+      FROM student_profiles sp
+      JOIN users u ON u.id = sp.user_id
+      WHERE sp.user_id = $1
+        AND sp.group_id = $2
+        AND u.role = 'student'
+        AND u.status IN ('active','blocked')
+      FOR UPDATE OF sp
+    `,[studentId,item.group_id]);
+
+    if (studentResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return response.status(404).json({ error: "Студент не найден в группе курса" });
+    }
+
+    const existingResult = await client.query(`
+      SELECT g.id, gi.title
+      FROM grades g
+      JOIN grade_items gi ON gi.id = g.grade_item_id
+      WHERE g.student_id = $1
+        AND gi.course_id = $2
+        AND gi.grade_date = $3
+        AND gi.id <> $4
+      LIMIT 1
+    `,[studentId,item.course_id,item.grade_date,item.id]);
+
+    if (existingResult.rowCount > 0) {
+      await client.query("ROLLBACK");
+      return response.status(409).json({
+        error: `У студента уже есть оценка за ${item.grade_date}: ${existingResult.rows[0].title}`
+      });
+    }
+
+    const result = await client.query(`
+      INSERT INTO grades (
+        grade_item_id,
+        student_id,
+        score,
+        comment,
+        graded_by
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (grade_item_id, student_id)
+      DO UPDATE SET
+        score = EXCLUDED.score,
+        comment = EXCLUDED.comment,
+        graded_by = EXCLUDED.graded_by,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING
+        id,
+        grade_item_id,
+        student_id,
+        score,
+        comment,
+        graded_by,
+        created_at,
+        updated_at
+    `,[
+      item.id,
+      studentId,
+      normalizedScore,
+      normalizedComment || null,
+      request.user.id
+    ]);
+
+    await client.query("COMMIT");
+
+    response.json({
+      message: "Оценка сохранена",
+      grade: result.rows[0]
+    });
+  } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(console.error);
+
+    console.error("Ошибка сохранения оценки:", error);
+    response.status(500).json({ error: "Ошибка сохранения оценки" });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+// Получить оценки студентов учебного курса
+router.get("/courses/:id/grades",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const courseId = request.params.id;
+
+    if (!/^\d+$/.test(courseId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор курса" });
+    }
+
+    const courseResult = await pool.query(`
+      SELECT id
+      FROM courses
+      WHERE id = $1
+        AND teacher_id = $2
+    `,[courseId,request.user.id]);
+
+    if (courseResult.rowCount === 0) {
+      return response.status(404).json({ error: "Учебный курс не найден" });
+    }
+
+    const result = await pool.query(`
+      SELECT
+        g.id,
+        g.grade_item_id,
+        g.student_id,
+        g.score,
+        g.comment,
+        g.graded_by,
+        g.created_at,
+        g.updated_at,
+
+        gi.lesson_id,
+        gi.assignment_id,
+        gi.title AS grade_item_title,
+        gi.item_type,
+        gi.grade_date::text AS grade_date,
+        gi.max_score,
+
+        u.last_name,
+        u.first_name,
+        u.middle_name,
+        sp.student_number
+
+      FROM grades g
+      JOIN grade_items gi ON gi.id = g.grade_item_id
+      JOIN users u ON u.id = g.student_id
+      JOIN student_profiles sp ON sp.user_id = g.student_id
+
+      WHERE gi.course_id = $1
+
+      ORDER BY
+        gi.grade_date,
+        gi.sort_order,
+        gi.id,
+        u.last_name,
+        u.first_name,
+        g.id
+    `,[courseId]);
+
+    response.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка получения оценок курса:", error);
+    response.status(500).json({ error: "Ошибка получения оценок курса" });
+  }
+});
+
+// Изменить оцениваемый элемент
+router.patch("/grade-items/:gradeItemId",requireAuth,requireTeacher,async (request, response) => {
+  let client;
+
+  try {
+    const gradeItemId = request.params.gradeItemId;
+    const { title, itemType, maxScore } = request.body;
+
+    if (!/^\d+$/.test(gradeItemId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор оценивания" });
+    }
+
+    const normalizedTitle = typeof title === "string" ? title.trim() : "";
+    const normalizedType = typeof itemType === "string" ? itemType.trim() : "";
+    const maxScoreText = typeof maxScore === "number" || typeof maxScore === "string" ? String(maxScore).trim() : "";
+
+    if (!normalizedTitle || normalizedTitle.length > 255) {
+      return response.status(400).json({ error: "Некорректное название оценивания" });
+    }
+
+    if (!normalizedType || normalizedType.length > 50) {
+      return response.status(400).json({ error: "Некорректный тип оценивания" });
+    }
+
+    if (!/^\d{1,4}(\.\d{1,2})?$/.test(maxScoreText) || Number(maxScoreText) <= 0) {
+      return response.status(400).json({ error: "Некорректный максимальный балл" });
+    }
+
+    const normalizedMaxScore = Number(maxScoreText);
+
+    client = await pool.connect();
+    await client.query("BEGIN");
+
+    const itemResult = await client.query(`
+      SELECT gi.id, gi.assignment_id
+      FROM grade_items gi
+      JOIN courses c ON c.id = gi.course_id
+      WHERE gi.id = $1
+        AND c.teacher_id = $2
+        AND c.is_active = TRUE
+      FOR UPDATE OF gi
+    `,[gradeItemId,request.user.id]);
+
+    if (itemResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return response.status(404).json({ error: "Оцениваемый элемент не найден" });
+    }
+
+    if (itemResult.rows[0].assignment_id !== null) {
+      await client.query("ROLLBACK");
+      return response.status(409).json({ error: "Оценивание онлайн-задания изменяется через само задание" });
+    }
+
+    const gradesResult = await client.query(`
+      SELECT MAX(score) AS highest_score
+      FROM grades
+      WHERE grade_item_id = $1
+    `,[gradeItemId]);
+
+    const highestScore = Number(gradesResult.rows[0].highest_score || 0);
+
+    if (normalizedMaxScore < highestScore) {
+      await client.query("ROLLBACK");
+      return response.status(409).json({
+        error: `Максимальный балл не может быть меньше уже выставленной оценки ${highestScore}`
+      });
+    }
+
+    const result = await client.query(`
+      UPDATE grade_items
+      SET
+        title = $1,
+        item_type = $2,
+        max_score = $3,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4
+      RETURNING
+        id,
+        course_id,
+        lesson_id,
+        assignment_id,
+        title,
+        item_type,
+        grade_date::text AS grade_date,
+        max_score,
+        sort_order,
+        created_at,
+        updated_at
+    `,[normalizedTitle,normalizedType,normalizedMaxScore,gradeItemId]);
+
+    await client.query("COMMIT");
+
+    response.json({
+      message: "Оценивание изменено",
+      gradeItem: result.rows[0]
+    });
+  } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(() => {});
+
+    console.error("Ошибка изменения оценивания:", error);
+    response.status(500).json({ error: "Ошибка изменения оценивания" });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+// Удалить оцениваемый элемент
+router.delete("/grade-items/:gradeItemId",requireAuth,requireTeacher,async (request, response) => {
+  let client;
+
+  try {
+    const gradeItemId = request.params.gradeItemId;
+
+    if (!/^\d+$/.test(gradeItemId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор оценивания" });
+    }
+
+    client = await pool.connect();
+    await client.query("BEGIN");
+
+    const itemResult = await client.query(`
+      SELECT gi.id, gi.assignment_id
+      FROM grade_items gi
+      JOIN courses c ON c.id = gi.course_id
+      WHERE gi.id = $1
+        AND c.teacher_id = $2
+        AND c.is_active = TRUE
+      FOR UPDATE OF gi
+    `,[gradeItemId,request.user.id]);
+
+    if (itemResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return response.status(404).json({ error: "Оцениваемый элемент не найден" });
+    }
+
+    if (itemResult.rows[0].assignment_id !== null) {
+      await client.query("ROLLBACK");
+      return response.status(409).json({ error: "Оценивание связано с онлайн-заданием" });
+    }
+
+    const gradesResult = await client.query(`
+      SELECT id
+      FROM grades
+      WHERE grade_item_id = $1
+      LIMIT 1
+    `,[gradeItemId]);
+
+    if (gradesResult.rowCount > 0) {
+      await client.query("ROLLBACK");
+      return response.status(409).json({
+        error: "Нельзя удалить оценивание, по которому уже выставлены оценки"
+      });
+    }
+
+    await client.query(`
+      DELETE FROM grade_items
+      WHERE id = $1
+    `,[gradeItemId]);
+
+    await client.query("COMMIT");
+
+    response.json({ message: "Оценивание удалено" });
+  } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(() => {});
+
+    console.error("Ошибка удаления оценивания:", error);
+    response.status(500).json({ error: "Ошибка удаления оценивания" });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+// Изменить занятие учебного курса
+router.patch("/lessons/:lessonId",requireAuth,requireTeacher,async (request, response) => {
+  let client;
+
+  try {
+    const lessonId = request.params.lessonId;
+    const { lessonDate, lessonType, topic } = request.body;
+
+    if (!/^\d+$/.test(lessonId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор занятия" });
+    }
+
+    const normalizedDate = typeof lessonDate === "string" ? lessonDate.trim() : "";
+    const normalizedType = typeof lessonType === "string" ? lessonType.trim() : "";
+    const normalizedTopic = typeof topic === "string" ? topic.trim() : "";
+
+    const parsedDate = new Date(`${normalizedDate}T00:00:00Z`);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate) ||
+        Number.isNaN(parsedDate.getTime()) ||
+        parsedDate.toISOString().slice(0,10) !== normalizedDate) {
+      return response.status(400).json({ error: "Некорректная дата занятия" });
+    }
+
+    if (!normalizedType || normalizedType.length > 50) {
+      return response.status(400).json({ error: "Некорректный вид занятия" });
+    }
+
+    if (normalizedTopic.length > 255) {
+      return response.status(400).json({ error: "Тема занятия слишком длинная" });
+    }
+
+    client = await pool.connect();
+    await client.query("BEGIN");
+
+    const lessonResult = await client.query(`
+      SELECT
+        l.id,
+        l.lesson_date::text AS lesson_date
+      FROM lessons l
+      JOIN courses c ON c.id = l.course_id
+      WHERE l.id = $1
+        AND c.teacher_id = $2
+        AND c.is_active = TRUE
+      FOR UPDATE OF l
+    `,[lessonId,request.user.id]);
+
+    if (lessonResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return response.status(404).json({ error: "Занятие не найдено" });
+    }
+
+    const lesson = lessonResult.rows[0];
+    const dateChanged = lesson.lesson_date !== normalizedDate;
+
+    if (dateChanged) {
+      const itemsResult = await client.query(`
+        SELECT id
+        FROM grade_items
+        WHERE lesson_id = $1
+        FOR UPDATE
+      `,[lessonId]);
+
+      if (itemsResult.rowCount > 0) {
+        const gradesResult = await client.query(`
+          SELECT g.id
+          FROM grades g
+          JOIN grade_items gi ON gi.id = g.grade_item_id
+          WHERE gi.lesson_id = $1
+          LIMIT 1
+        `,[lessonId]);
+
+        if (gradesResult.rowCount > 0) {
+          await client.query("ROLLBACK");
+          return response.status(409).json({
+            error: "Нельзя изменить дату занятия, по которому уже выставлены оценки"
+          });
+        }
+      }
+    }
+
+    const result = await client.query(`
+      UPDATE lessons
+      SET
+        lesson_date = $1,
+        lesson_type = $2,
+        topic = $3,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4
+      RETURNING
+        id,
+        course_id,
+        lesson_date::text AS lesson_date,
+        lesson_type,
+        topic,
+        sort_order,
+        created_at,
+        updated_at
+    `,[normalizedDate,normalizedType,normalizedTopic || null,lessonId]);
+
+    if (dateChanged) {
+      await client.query(`
+        UPDATE grade_items
+        SET
+          grade_date = $1,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE lesson_id = $2
+      `,[normalizedDate,lessonId]);
+    }
+
+    await client.query("COMMIT");
+
+    response.json({
+      message: "Занятие изменено",
+      lesson: result.rows[0]
+    });
+  } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(() => {});
+
+    console.error("Ошибка изменения занятия:", error);
+    response.status(500).json({ error: "Ошибка изменения занятия" });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+// Удалить занятие учебного курса
+router.delete("/lessons/:lessonId",requireAuth,requireTeacher,async (request, response) => {
+  let client;
+
+  try {
+    const lessonId = request.params.lessonId;
+
+    if (!/^\d+$/.test(lessonId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор занятия" });
+    }
+
+    client = await pool.connect();
+    await client.query("BEGIN");
+
+    const lessonResult = await client.query(`
+      SELECT l.id
+      FROM lessons l
+      JOIN courses c ON c.id = l.course_id
+      WHERE l.id = $1
+        AND c.teacher_id = $2
+        AND c.is_active = TRUE
+      FOR UPDATE OF l
+    `,[lessonId,request.user.id]);
+
+    if (lessonResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return response.status(404).json({ error: "Занятие не найдено" });
+    }
+
+    const itemsResult = await client.query(`
+      SELECT id
+      FROM grade_items
+      WHERE lesson_id = $1
+      LIMIT 1
+    `,[lessonId]);
+
+    if (itemsResult.rowCount > 0) {
+      await client.query("ROLLBACK");
+      return response.status(409).json({
+        error: "Сначала необходимо удалить оценивания этого занятия"
+      });
+    }
+
+    await client.query(`
+      DELETE FROM lessons
+      WHERE id = $1
+    `,[lessonId]);
+
+    await client.query("COMMIT");
+
+    response.json({ message: "Занятие удалено" });
+  } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(() => {});
+
+    console.error("Ошибка удаления занятия:", error);
+    response.status(500).json({ error: "Ошибка удаления занятия" });
+  } finally {
+    if (client) client.release();
   }
 });
 

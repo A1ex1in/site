@@ -106,6 +106,75 @@
         <div id="coursesList">
             Загрузка учебных курсов...
         </div>
+
+        <section id="courseLessonsSection" hidden>
+            <h2 id="courseLessonsTitle">Занятия курса</h2>
+
+            <h3>Создать занятие</h3>
+
+            <form id="lessonForm">
+                <div>
+                    <label for="lessonDate">Дата занятия</label>
+                    <input id="lessonDate" type="date" required>
+                </div>
+
+                <div>
+                    <label for="lessonType">Вид занятия</label>
+                    <select id="lessonType" required>
+                        <option value="lecture">Лекция</option>
+                        <option value="practical">Практическое занятие</option>
+                        <option value="laboratory">Лабораторная работа</option>
+                        <option value="test">Тестирование</option>
+                        <option value="other">Другое</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="lessonTopic">Тема занятия</label>
+                    <input id="lessonTopic" type="text" maxlength="255">
+                </div>
+
+                <button type="submit">Создать занятие</button>
+            </form>
+
+            <h3>Список занятий</h3>
+            <div id="lessonsList"></div>
+        </section>
+
+        <section id="gradeItemsSection" hidden>
+          <h2 id="gradeItemsTitle">Оценивания занятия</h2>
+
+          <h3>Создать оценивание</h3>
+
+          <form id="gradeItemForm">
+            <div>
+              <label for="gradeItemTitle">Название оценивания</label>
+              <input id="gradeItemTitle" type="text" maxlength="255" required>
+            </div>
+
+            <div>
+              <label for="gradeItemType">Вид оценивания</label>
+              <select id="gradeItemType" required>
+                <option value="answer">Ответ по теме</option>
+                <option value="practical">Практическая работа</option>
+                <option value="laboratory">Лабораторная работа</option>
+                <option value="test">Тестирование</option>
+                <option value="other">Другое</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="gradeItemMaxScore">Максимальный балл</label>
+              <input id="gradeItemMaxScore" type="number" min="0.01" max="9999.99" step="0.01" value="5" required>
+            </div>
+
+            <button type="submit">Создать оценивание</button>
+          </form>
+
+          <h3>Список оцениваний</h3>
+          <div id="gradeItemsList"></div>
+        </section>
+
     <h2>Материалы курса</h2>
 
         <section id="courseMaterialsSection" hidden>
