@@ -645,9 +645,9 @@ function renderSubmission() {
   if (currentSubmission.submitted_at) {
     submissionSubmittedAt.textContent = `Отправлено: ${new Date(currentSubmission.submitted_at).toLocaleString("ru-RU")}`;
   }
-  if (currentSubmission.teacher_comment || currentSubmission.score !== null || currentSubmission.checked_at) {
+  if (currentSubmission.teacher_comment || currentSubmission.score != null || currentSubmission.checked_at) {
     submissionFeedback.hidden = false;
-    if (currentSubmission.score !== null) {
+    if (currentSubmission.score != null) {
       submissionScore.textContent = `Оценка: ${currentSubmission.score}`;
     }
     if (currentSubmission.teacher_comment) {
