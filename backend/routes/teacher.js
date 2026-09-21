@@ -1164,7 +1164,29 @@ router.delete("/assignments/:assignmentId/material-files/:materialFileId",requir
 router.get("/assignments/:assignmentId/submissions",requireAuth,requireTeacher,requireAssignmentAccess,async (request, response) => {
   try {
     const result = await pool.query(`
-      SELECT ss.id, ss.student_id, ss.status, ss.student_comment, ss.submitted_at, ss.score, ss.teacher_comment, ss.checked_at, a.max_score, u.first_name, u.last_name, u.middle_name, sp.student_number,
+      SELECT
+        ss.id,
+        ss.assignment_id,
+        ss.student_id,
+        ss.status,
+        ss.student_comment,
+        ss.submitted_at,
+
+        CASE
+          WHEN ss.status = 'graded' THEN g.score
+          ELSE NULL
+        END AS score,
+
+        ss.teacher_comment,
+        ss.checked_at,
+
+        u.last_name,
+        u.first_name,
+        u.middle_name,
+        sp.student_number,
+
+        a.max_score,
+
         CASE
           WHEN a.deadline IS NOT NULL
             AND ss.submitted_at IS NOT NULL
@@ -1172,21 +1194,32 @@ router.get("/assignments/:assignmentId/submissions",requireAuth,requireTeacher,r
           THEN TRUE
           ELSE FALSE
         END AS is_late
+
       FROM student_submissions ss
-      JOIN assignments a ON a.id = ss.assignment_id
-      JOIN student_profiles sp ON sp.user_id = ss.student_id
-      JOIN users u ON u.id = ss.student_id
+
+      JOIN users u
+        ON u.id = ss.student_id
+
+      JOIN student_profiles sp
+        ON sp.user_id = ss.student_id
+
+      JOIN assignments a
+        ON a.id = ss.assignment_id
+
+      LEFT JOIN grade_items gi
+        ON gi.assignment_id = ss.assignment_id
+        AND gi.item_type = 'assignment'
+
+      LEFT JOIN grades g
+        ON g.grade_item_id = gi.id
+        AND g.student_id = ss.student_id
+
       WHERE ss.assignment_id = $1
+
       ORDER BY
-        CASE ss.status
-          WHEN 'submitted' THEN 1
-          WHEN 'returned' THEN 2
-          WHEN 'graded' THEN 3
-          WHEN 'draft' THEN 4
-        END,
-        ss.submitted_at,
         u.last_name,
-        u.first_name
+        u.first_name,
+        u.middle_name
     `,[request.assignment.id]);
     response.json(result.rows);
   } catch (error) {

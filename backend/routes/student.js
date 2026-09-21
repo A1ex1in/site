@@ -355,10 +355,36 @@ router.get("/assignments/:assignmentId/files/:source/:fileId/download",requireAu
 router.get("/assignments/:assignmentId/submission",requireAuth,requireStudent,requireStudentAssignmentAccess,async (request, response) => {
   try {
     const result = await pool.query(`
-      SELECT id, assignment_id, student_id, status, student_comment, submitted_at, score, teacher_comment, checked_at, created_at, updated_at
-      FROM student_submissions
-      WHERE assignment_id = $1
-        AND student_id = $2
+      SELECT
+        ss.id,
+        ss.assignment_id,
+        ss.student_id,
+        ss.status,
+        ss.student_comment,
+        ss.submitted_at,
+
+        CASE
+          WHEN ss.status = 'graded' THEN g.score
+          ELSE NULL
+        END AS score,
+
+        ss.teacher_comment,
+        ss.checked_at,
+        ss.created_at,
+        ss.updated_at
+
+      FROM student_submissions ss
+
+      LEFT JOIN grade_items gi
+        ON gi.assignment_id = ss.assignment_id
+        AND gi.item_type = 'assignment'
+
+      LEFT JOIN grades g
+        ON g.grade_item_id = gi.id
+        AND g.student_id = ss.student_id
+
+      WHERE ss.assignment_id = $1
+        AND ss.student_id = $2
     `,[request.assignment.id,request.user.id]);
     response.json({
       submission: result.rows[0] || null
