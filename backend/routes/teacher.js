@@ -1305,7 +1305,6 @@ router.patch("/submissions/:submissionId/return",requireAuth,requireTeacher,requ
       UPDATE student_submissions
       SET
         status = 'returned',
-        score = NULL,
         teacher_comment = $1,
         checked_at = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP
@@ -1317,7 +1316,6 @@ router.patch("/submissions/:submissionId/return",requireAuth,requireTeacher,requ
         status,
         student_comment,
         submitted_at,
-        score,
         teacher_comment,
         checked_at,
         updated_at
@@ -1498,11 +1496,10 @@ router.patch("/submissions/:submissionId/grade",requireAuth,requireTeacher,requi
       UPDATE student_submissions
       SET
         status = 'graded',
-        score = $1,
-        teacher_comment = $2,
+        teacher_comment = $1,
         checked_at = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $3
+      WHERE id = $2
       RETURNING
         id,
         assignment_id,
@@ -1510,12 +1507,10 @@ router.patch("/submissions/:submissionId/grade",requireAuth,requireTeacher,requi
         status,
         student_comment,
         submitted_at,
-        score,
         teacher_comment,
         checked_at,
         updated_at
     `,[
-      normalizedScore,
       normalizedComment || null,
       request.submission.id
     ]);
@@ -2528,8 +2523,18 @@ async function requireTeacherSubmissionAccess(request, response, next) {
       return response.status(400).json({ error: "Некорректный идентификатор работы" });
     }
     const result = await pool.query(`
-      SELECT ss.id, ss.assignment_id, ss.student_id, ss.status, ss.student_comment, ss.submitted_at, ss.score, ss.teacher_comment, ss.checked_at, a.title
-        AS assignment_title, a.max_score, a.deadline
+      SELECT
+        ss.id,
+        ss.assignment_id,
+        ss.student_id,
+        ss.status,
+        ss.student_comment,
+        ss.submitted_at,
+        ss.teacher_comment,
+        ss.checked_at,
+        a.title AS assignment_title,
+        a.max_score,
+        a.deadline
       FROM student_submissions ss
       JOIN assignments a ON a.id = ss.assignment_id
       JOIN courses c ON c.id = a.course_id

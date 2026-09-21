@@ -415,7 +415,7 @@ router.put("/assignments/:assignmentId/submission",requireAuth,requireStudent,re
           student_comment
         )
         VALUES ($1, $2, $3)
-        RETURNING id, assignment_id, student_id, status, student_comment, submitted_at, score, teacher_comment, checked_at, created_at, updated_at
+        RETURNING id, assignment_id, student_id, status, student_comment, submitted_at, teacher_comment, checked_at, created_at, updated_at
       `,[
         request.assignment.id,
         request.user.id,
@@ -440,7 +440,7 @@ router.put("/assignments/:assignmentId/submission",requireAuth,requireStudent,re
         student_comment = $1,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
-      RETURNING id, assignment_id, student_id, status, student_comment, submitted_at, score, teacher_comment, checked_at, created_at, updated_at
+      RETURNING id, assignment_id, student_id, status, student_comment, submitted_at, teacher_comment, checked_at, created_at, updated_at
     `,[normalizedComment || null,existingSubmission.id]);
     response.json({
       message: "Работа сохранена",
@@ -475,11 +475,10 @@ router.post("/assignments/:assignmentId/submission/submit",requireAuth,requireSt
       SET
         status = 'submitted',
         submitted_at = CURRENT_TIMESTAMP,
-        score = NULL,
         checked_at = NULL,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
-      RETURNING id, assignment_id, student_id, status, student_comment, submitted_at, score,
+      RETURNING id, assignment_id, student_id, status, student_comment, submitted_at,
         teacher_comment, checked_at, created_at, updated_at
     `,[submission.id]);
     response.json({

@@ -455,7 +455,6 @@ CREATE TABLE student_submissions (
     student_comment TEXT,
     submitted_at TIMESTAMPTZ,
 
-    score NUMERIC(6,2),
     teacher_comment TEXT,
     checked_at TIMESTAMPTZ,
 
@@ -475,20 +474,11 @@ CREATE TABLE student_submissions (
     CONSTRAINT submission_unique
         UNIQUE (assignment_id, student_id),
 
-    CONSTRAINT submission_score_check
-        CHECK (score IS NULL OR score >= 0),
-
     CONSTRAINT submission_submitted_at_check
         CHECK (
             (status = 'draft' AND submitted_at IS NULL)
             OR
             (status IN ('submitted', 'returned', 'graded') AND submitted_at IS NOT NULL)
-        ),
-
-    CONSTRAINT submission_graded_score_check
-        CHECK (
-            status <> 'graded'
-            OR score IS NOT NULL
         )
 );
 
