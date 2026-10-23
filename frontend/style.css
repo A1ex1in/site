@@ -152,6 +152,10 @@ input::placeholder, textarea::placeholder { color: #9aa8c2; }
 #changeGroupForm { grid-template-columns:minmax(220px,360px) max-content; justify-content:start; align-items:end; }
 #changeGroupForm button { min-width:170px; }
 #studentStatusButton { margin-top:12px; background:#fff0f2 !important; color:#d84256 !important; }
+.grade-student-row { display:grid; gap:9px; }
+.grade-entry-form { display:grid !important; grid-template-columns:minmax(140px,.75fr) minmax(260px,1.5fr) max-content !important; align-items:end; gap:13px; }
+.grade-entry-form label { display:grid; gap:7px; min-width:0; }
+.grade-entry-form button { min-width:180px; margin:0 !important; }
 #coursesList, #materialsList, #assignmentsList, #studentsList, #groupsList, #disciplinesList, #lessonsList, #gradeItemsList, #submissionsList, #materialFilesList, #assignmentFilesList, #submissionFilesList, #groupStudentsList { display:grid; gap:10px; }
 #coursesList > div, #materialsList > div, #assignmentsList > div, #studentsList > div, #groupsList > div, #disciplinesList > div, #lessonsList > div, #gradeItemsList > div, #submissionsList > div, #materialFilesList > div, #assignmentFilesList > div, #submissionFilesList > div, #groupStudentsList > div { padding:14px; border:1px solid #e4ebf4; border-radius:11px; background:#f9fbfe; line-height:1.7; }
 #profile p { margin:7px 0; color:#52627f; }
@@ -192,6 +196,8 @@ th { background:#eff5fd; }
   .dashboard-page .content-stack > * { grid-column:1 !important; }
   .dashboard-rail { grid-template-columns:1fr 1fr; }
   .calendar-card { grid-row:span 2; }
+  .grade-entry-form { grid-template-columns:minmax(120px,.75fr) minmax(200px,1.25fr) !important; }
+  .grade-entry-form button { grid-column:1/-1; width:100%; }
 }
 
 @media (max-width:600px) {
@@ -221,5 +227,7 @@ th { background:#eff5fd; }
   .row-actions button { flex:1 1 auto; }
   #changeGroupForm { grid-template-columns:1fr; }
   #changeGroupForm button { width:100%; }
+  .grade-entry-form { grid-template-columns:1fr !important; }
+  .grade-entry-form button { grid-column:auto; }
   #message:not(:empty) { left:14px; right:14px; top:12px; max-width:none; }
 }

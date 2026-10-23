@@ -1891,6 +1891,7 @@ async function loadGradeItemGrades(item, panel) {
       const grade = gradesByStudent.get(String(student.id));
 
       const row = document.createElement("div");
+      row.className = "grade-student-row";
 
       const fullName = [
         student.last_name,
@@ -1902,6 +1903,7 @@ async function loadGradeItemGrades(item, panel) {
       studentElement.textContent = `${fullName} — ${student.student_number || "Без номера"}`;
 
       const gradeForm = document.createElement("form");
+      gradeForm.className = "grade-entry-form";
 
       const scoreLabel = document.createElement("label");
       scoreLabel.textContent = "Балл: ";
