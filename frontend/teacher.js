@@ -621,6 +621,7 @@ async function loadMaterials(courseId, courseName = "") {
     }
     for (const material of data) {
       const container = document.createElement("div");
+      container.className = "entity-row";
       const titleElement = document.createElement("strong");
       titleElement.textContent = material.title;
       const infoElement = document.createElement("span");
@@ -636,8 +637,7 @@ async function loadMaterials(courseId, courseName = "") {
       }
       container.appendChild(titleElement);
       container.appendChild(infoElement);
-      container.appendChild(filesButton);
-      container.appendChild(publicationButton);
+      container.appendChild(window.EduUI.createActionGroup(filesButton, publicationButton));
       materialsList.appendChild(container);
     }
   } catch (error) {
@@ -663,6 +663,7 @@ async function loadCourses() {
     }
     for (const course of data) {
       const container = document.createElement("div");
+      container.className = "entity-row";
 
       const disciplineElement = document.createElement("strong");
       disciplineElement.textContent = course.discipline_name;
@@ -688,10 +689,7 @@ async function loadCourses() {
 
       container.appendChild(disciplineElement);
       container.appendChild(infoElement);
-      container.appendChild(openButton);
-      container.appendChild(assignmentsButton);
-      container.appendChild(journalButton);
-      container.appendChild(lessonsButton);
+      container.appendChild(window.EduUI.createActionGroup(openButton, assignmentsButton, journalButton, lessonsButton));
       coursesList.appendChild(container);
     }
   } catch (error) {
@@ -719,12 +717,17 @@ async function loadAssignments(courseId, courseName = "") {
     assignmentFilesSection.hidden = true;
     selectedAssignmentId = null;
     selectedAssignmentTitle = "";
+    window.EduUI?.setCalendarEvents(`teacher-assignments-${courseId}`, data.flatMap((assignment) => [
+      assignment.deadline ? { date: assignment.deadline, title: `Срок: ${assignment.title}`, type: "assignment" } : null,
+      assignment.grade_date ? { date: assignment.grade_date, title: `В журнале: ${assignment.title}`, type: "assignment" } : null
+    ].filter(Boolean)));
     if (data.length === 0) {
       assignmentsList.textContent = "Задания пока не созданы.";
       return;
     }
     for (const assignment of data) {
       const container = document.createElement("div");
+      container.className = "entity-card";
 
       const titleElement = document.createElement("strong");
       titleElement.textContent = assignment.title;
@@ -761,10 +764,8 @@ async function loadAssignments(courseId, courseName = "") {
       container.appendChild(scoreElement);
       container.appendChild(descriptionElement);
       container.appendChild(deadlineElement);
-      container.appendChild(publicationButton);
-      container.appendChild(filesButton);
-      container.appendChild(submissionsButton);
       container.appendChild(gradeDateElement);
+      container.appendChild(window.EduUI.createActionGroup(publicationButton, filesButton, submissionsButton));
       assignmentsList.appendChild(container);
     }
   } catch (error) {
@@ -906,6 +907,7 @@ async function loadPendingStudents() {
     }
     for (const student of students) {
       const container = document.createElement("div");
+      container.className = "entity-row";
       const fullName = [student.last_name, student.first_name, student.middle_name].filter(Boolean).join(" ");
       const info = document.createElement("span");
       info.textContent = `${fullName} | ` + `${student.group_name ?? "Без группы"} | ` + `${student.email} `;
@@ -926,8 +928,7 @@ async function loadPendingStudents() {
         }
       );
       container.appendChild(info);
-      container.appendChild(approveButton);
-      container.appendChild(rejectButton);
+      container.appendChild(window.EduUI.createActionGroup(approveButton, rejectButton));
       studentsList.appendChild(container);
     }
   } catch (error) {
@@ -955,6 +956,7 @@ async function loadGroups() {
     }
     for (const group of data) {
       const container = document.createElement("div");
+      container.className = "entity-row";
       const nameElement = document.createElement("strong");
       nameElement.textContent = group.name;
       const descriptionElement = document.createElement("span");
@@ -972,7 +974,7 @@ async function loadGroups() {
           );
         }
       );
-      container.appendChild(openButton);
+      container.appendChild(window.EduUI.createActionGroup(openButton));
       groupsList.appendChild(container);
     }
   } catch (error) {
@@ -1003,6 +1005,7 @@ async function loadGroupStudents(groupId) {
     }
     for (const student of data.students) {
       const container = document.createElement("div");
+      container.className = "entity-row";
       const fullName = [student.last_name, student.first_name, student.middle_name].filter(Boolean).join(" ");
       const nameElement = document.createElement("strong");
       nameElement.textContent = fullName;
@@ -1022,7 +1025,7 @@ async function loadGroupStudents(groupId) {
       );
       container.appendChild(nameElement);
       container.appendChild(infoElement);
-      container.appendChild(openButton);
+      container.appendChild(window.EduUI.createActionGroup(openButton));
       groupStudentsList.appendChild(container);
     }
   } catch (error) {
@@ -1417,6 +1420,11 @@ async function loadLessons(courseId, courseName = "") {
 
     courseLessonsTitle.textContent = `Занятия курса: ${courseName}`;
     lessonsList.innerHTML = "";
+    window.EduUI?.setCalendarEvents(`teacher-lessons-${courseId}`, data.map((lesson) => ({
+      date: lesson.lesson_date,
+      title: `${lesson.topic || "Занятие"} · ${courseName}`,
+      type: "lesson"
+    })));
 
     if (data.length === 0) {
       lessonsList.textContent = "Занятия пока не созданы.";
@@ -1433,6 +1441,7 @@ async function loadLessons(courseId, courseName = "") {
 
     for (const lesson of data) {
       const container = document.createElement("div");
+      container.className = "entity-row";
 
       const dateElement = document.createElement("strong");
       dateElement.textContent = lesson.lesson_date.split("-").reverse().join(".");
@@ -1608,9 +1617,7 @@ async function loadLessons(courseId, courseName = "") {
       container.appendChild(dateElement);
       container.appendChild(typeElement);
       container.appendChild(topicElement);
-      container.appendChild(gradeItemsButton);
-      container.appendChild(editButton);
-      container.appendChild(deleteButton);
+      container.appendChild(window.EduUI.createActionGroup(gradeItemsButton, editButton, deleteButton));
       container.appendChild(editForm);
 
       lessonsList.appendChild(container);
@@ -1656,6 +1663,7 @@ async function loadGradeItems(lessonId, lessonTitle = "") {
 
     for (const item of data) {
       const container = document.createElement("div");
+      container.className = "entity-row";
 
       const titleElement = document.createElement("strong");
       titleElement.textContent = item.title;
@@ -1828,9 +1836,7 @@ async function loadGradeItems(lessonId, lessonTitle = "") {
       container.appendChild(titleElement);
       container.appendChild(typeElement);
       container.appendChild(scoreElement);
-      container.appendChild(gradesButton);
-      container.appendChild(editButton);
-      container.appendChild(deleteButton);
+      container.appendChild(window.EduUI.createActionGroup(gradesButton, editButton, deleteButton));
       container.appendChild(editForm);
       container.appendChild(gradesPanel);
 

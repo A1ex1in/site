@@ -17,6 +17,12 @@
     logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 17l5-5-5-5M15 12H3M15 4h5v16h-5"/></svg>'
   };
 
+  const today = new Date();
+  let calendarCursor = new Date(today.getFullYear(), today.getMonth(), 1);
+  let selectedDateKey = toDateKey(today);
+  const calendarEventSources = new Map();
+  let noticeTimer = null;
+
   function renderIcons(root) {
     root.querySelectorAll("[data-icon]").forEach((element) => {
       if (icons[element.dataset.icon]) element.innerHTML = icons[element.dataset.icon];
@@ -42,9 +48,149 @@
       : [["Главная","home","#dashboardOverview"],["Мои курсы","book","#coursesList"],["Материалы","folder","#courseMaterialsSection"],["Задания","task","#courseAssignmentsSection"],["Мой профиль","user","#profile"]];
   }
 
-  function prettyDate() {
-    const text = new Intl.DateTimeFormat("ru-RU", { weekday:"long", day:"numeric", month:"long", year:"numeric" }).format(new Date());
-    return text.charAt(0).toUpperCase() + text.slice(1);
+  function toDateKey(value) {
+    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function getCalendarEvents() {
+    return Array.from(calendarEventSources.values()).flat();
+  }
+
+  function renderCalendar() {
+    const grid = document.getElementById("calendarGrid");
+    const monthLabel = document.getElementById("calendarMonth");
+    if (!grid || !monthLabel) return;
+    monthLabel.textContent = new Intl.DateTimeFormat("ru-RU", { month:"long", year:"numeric" }).format(calendarCursor);
+    grid.innerHTML = "";
+    const year = calendarCursor.getFullYear();
+    const month = calendarCursor.getMonth();
+    const firstDayOffset = (new Date(year, month, 1).getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPreviousMonth = new Date(year, month, 0).getDate();
+    const events = getCalendarEvents();
+
+    for (let cell = 0; cell < 42; cell += 1) {
+      let day = cell - firstDayOffset + 1;
+      let cellMonth = month;
+      let cellYear = year;
+      let outside = false;
+      if (day < 1) {
+        day = daysInPreviousMonth + day;
+        cellMonth -= 1;
+        outside = true;
+      } else if (day > daysInMonth) {
+        day -= daysInMonth;
+        cellMonth += 1;
+        outside = true;
+      }
+      const date = new Date(cellYear, cellMonth, day);
+      const key = toDateKey(date);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "calendar-day";
+      if (outside) button.classList.add("is-outside");
+      if (key === toDateKey(today)) button.classList.add("is-today");
+      if (key === selectedDateKey) button.classList.add("is-selected");
+      if (events.some((event) => event.date === key)) button.classList.add("has-events");
+      button.textContent = String(day);
+      button.setAttribute("aria-label", new Intl.DateTimeFormat("ru-RU", { dateStyle:"long" }).format(date));
+      button.addEventListener("click", () => {
+        selectedDateKey = key;
+        calendarCursor = new Date(date.getFullYear(), date.getMonth(), 1);
+        renderCalendar();
+        renderEvents();
+      });
+      grid.appendChild(button);
+    }
+  }
+
+  function renderEvents() {
+    const list = document.getElementById("calendarEvents");
+    const title = document.getElementById("eventsTitle");
+    if (!list || !title) return;
+    const selectedDate = new Date(`${selectedDateKey}T12:00:00`);
+    title.textContent = `События · ${new Intl.DateTimeFormat("ru-RU", { day:"numeric", month:"long" }).format(selectedDate)}`;
+    const events = getCalendarEvents().filter((event) => event.date === selectedDateKey);
+    list.innerHTML = "";
+    if (events.length === 0) {
+      list.innerHTML = '<p class="rail-empty">На выбранную дату событий нет.</p>';
+      return;
+    }
+    events.slice(0, 5).forEach((event) => {
+      const item = document.createElement("div");
+      item.className = "rail-event";
+      const dot = document.createElement("span");
+      dot.className = `rail-event-dot ${event.type === "assignment" ? "assignment" : ""}`;
+      const content = document.createElement("span");
+      content.textContent = event.title;
+      const kind = document.createElement("small");
+      kind.textContent = event.type === "assignment" ? "Задание" : "Занятие";
+      content.appendChild(kind);
+      item.appendChild(dot);
+      item.appendChild(content);
+      list.appendChild(item);
+    });
+  }
+
+  function setCalendarEvents(source, events) {
+    calendarEventSources.set(source, (events || []).map((event) => ({
+      date: toDateKey(event.date),
+      title: event.title || "Событие",
+      type: event.type || "lesson"
+    })).filter((event) => event.date));
+    renderCalendar();
+    renderEvents();
+  }
+
+  function createActionGroup(...buttons) {
+    const group = document.createElement("div");
+    group.className = "row-actions";
+    buttons.flat().filter(Boolean).forEach((button) => {
+      if (/Удалить|Отклонить|Заблокировать/.test(button.textContent)) button.classList.add("danger-action");
+      group.appendChild(button);
+    });
+    return group;
+  }
+
+  function addRailNotice(text) {
+    const list = document.getElementById("railNotifications");
+    if (!list || !text || /Загрузка/.test(text)) return;
+    if (list.querySelector(".rail-empty")) list.innerHTML = "";
+    const item = document.createElement("div");
+    item.className = "rail-notice";
+    const dot = document.createElement("span");
+    dot.className = "rail-event-dot";
+    const content = document.createElement("span");
+    content.textContent = text;
+    const time = document.createElement("small");
+    time.textContent = "Только что";
+    content.appendChild(time);
+    item.appendChild(dot);
+    item.appendChild(content);
+    list.prepend(item);
+    while (list.children.length > 3) list.lastElementChild.remove();
+  }
+
+  function initNotifications() {
+    const message = document.getElementById("message");
+    if (!message) return;
+    message.title = "Нажмите, чтобы закрыть";
+    message.addEventListener("click", () => { message.textContent = ""; });
+    const observer = new MutationObserver(() => {
+      const text = message.textContent.trim();
+      if (!text) return;
+      addRailNotice(text);
+      window.clearTimeout(noticeTimer);
+      const isError = /ошиб|не удалось|нет доступа|укажите|выберите|сначала/i.test(text);
+      noticeTimer = window.setTimeout(() => { message.textContent = ""; }, isError ? 7000 : 4000);
+    });
+    observer.observe(message, { childList:true, characterData:true, subtree:true });
   }
 
   function initDashboard() {
@@ -63,19 +209,49 @@
       </aside>
       <button class="sidebar-backdrop" type="button" aria-label="Закрыть меню"></button>
       <main class="workspace">
-        <header class="workspace-header"><button class="menu-toggle" type="button" aria-label="Открыть меню">${icons.menu}</button><div class="workspace-title"><h1 id="welcomeTitle">Добро пожаловать!</h1><p>${role === "teacher" ? "Управляйте курсами, заданиями и учебной активностью студентов." : "Ваши курсы, задания и результаты собраны в одном месте."}</p></div><div class="date-pill">${icons.calendar}<span>${prettyDate()}</span></div></header>
-        <section class="overview-panel" id="dashboardOverview"><div class="stat-grid">
-          <article class="stat-card"><span class="stat-icon">${icons.book}</span><span><strong class="stat-value" id="statCourses">—</strong><span class="stat-label">${role === "teacher" ? "Учебных курсов" : "Моих курсов"}</span></span></article>
-          <article class="stat-card"><span class="stat-icon">${icons.users}</span><span><strong class="stat-value" id="statPeople">—</strong><span class="stat-label">${role === "teacher" ? "Заявок студентов" : "Учебная группа"}</span></span></article>
-          <article class="stat-card"><span class="stat-icon">${icons.task}</span><span><strong class="stat-value" id="statTasks">—</strong><span class="stat-label">Активных заданий</span></span></article>
-          <article class="stat-card"><span class="stat-icon">${icons.chart}</span><span><strong class="stat-value">100%</strong><span class="stat-label">Система доступна</span></span></article>
-        </div></section>
-        <div class="content-stack"></div>
+        <header class="workspace-header"><button class="menu-toggle" type="button" aria-label="Открыть меню">${icons.menu}</button><div class="workspace-title"><h1 id="welcomeTitle">Добро пожаловать!</h1><p>${role === "teacher" ? "Управляйте курсами, заданиями и учебной активностью студентов." : "Ваши курсы, задания и результаты собраны в одном месте."}</p></div></header>
+        <div class="dashboard-layout">
+          <div class="dashboard-main">
+            <section class="overview-panel" id="dashboardOverview"><div class="stat-grid">
+              <article class="stat-card"><span class="stat-icon">${icons.book}</span><span><strong class="stat-value" id="statCourses">—</strong><span class="stat-label">${role === "teacher" ? "Учебных курсов" : "Моих курсов"}</span></span></article>
+              <article class="stat-card"><span class="stat-icon">${icons.users}</span><span><strong class="stat-value" id="statPeople">—</strong><span class="stat-label">${role === "teacher" ? "Заявок студентов" : "Учебная группа"}</span></span></article>
+              <article class="stat-card"><span class="stat-icon">${icons.task}</span><span><strong class="stat-value" id="statTasks">—</strong><span class="stat-label">Активных заданий</span></span></article>
+              <article class="stat-card"><span class="stat-icon">${icons.chart}</span><span><strong class="stat-value">100%</strong><span class="stat-label">Система доступна</span></span></article>
+            </div></section>
+            <div class="content-stack"></div>
+          </div>
+          <aside class="dashboard-rail" aria-label="Календарь и уведомления">
+            <section class="rail-card calendar-card">
+              <div class="calendar-head"><strong id="calendarMonth"></strong><div class="calendar-nav"><button id="calendarPrevious" type="button" aria-label="Предыдущий месяц">‹</button><button id="calendarNext" type="button" aria-label="Следующий месяц">›</button></div></div>
+              <div class="calendar-weekdays"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
+              <div class="calendar-grid" id="calendarGrid"></div>
+            </section>
+            <section class="rail-card"><h2 class="rail-card-title" id="eventsTitle">События</h2><div class="rail-list" id="calendarEvents"><p class="rail-empty">На выбранную дату событий нет.</p></div></section>
+            <section class="rail-card"><h2 class="rail-card-title">Уведомления</h2><div class="rail-list" id="railNotifications"><p class="rail-empty">Новых уведомлений нет.</p></div></section>
+            <section class="rail-card"><h2 class="rail-card-title">Быстрые действия</h2><div class="quick-actions">${role === "teacher" ? '<button class="quick-action" data-quick-target="#courseForm">Создать курс</button><button class="quick-action" data-quick-target="#assignmentForm">Создать задание</button><button class="quick-action" data-quick-target="#materialForm">Добавить материал</button><button class="quick-action" data-quick-target="#groupForm">Добавить группу</button>' : '<button class="quick-action" data-quick-target="#coursesList">Мои курсы</button><button class="quick-action" data-quick-target="#courseAssignmentsSection">Задания</button><button class="quick-action" data-quick-target="#courseMaterialsSection">Материалы</button><button class="quick-action" data-quick-target="#profile">Профиль</button>'}</div></section>
+          </aside>
+        </div>
       </main>`;
 
     const content = shell.querySelector(".content-stack");
     contentNodes.forEach((node) => content.appendChild(node));
     document.body.insertBefore(shell, document.body.firstChild);
+
+    shell.querySelector("#calendarPrevious").addEventListener("click", () => {
+      calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() - 1, 1);
+      renderCalendar();
+    });
+    shell.querySelector("#calendarNext").addEventListener("click", () => {
+      calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + 1, 1);
+      renderCalendar();
+    });
+    shell.querySelectorAll("[data-quick-target]").forEach((button) => button.addEventListener("click", () => {
+      const target = document.querySelector(button.dataset.quickTarget);
+      if (target && !target.hidden) target.scrollIntoView({ behavior:"smooth", block:"center" });
+    }));
+    renderCalendar();
+    renderEvents();
+    initNotifications();
 
     const closeMenu = () => document.body.classList.remove("sidebar-open");
     shell.querySelector(".menu-toggle").addEventListener("click", () => document.body.classList.toggle("sidebar-open"));
@@ -119,7 +295,7 @@
     if (welcome) welcome.textContent = `Добро пожаловать, ${first || "пользователь"}!`;
   }
 
-  window.EduUI = { setUser };
+  window.EduUI = { setUser, setCalendarEvents, createActionGroup };
   renderIcons(document);
   initPasswordToggles();
   if (document.body.classList.contains("dashboard-page")) initDashboard();

@@ -199,6 +199,7 @@ async function loadCourses() {
     }
     for (const course of data) {
       const container = document.createElement("div");
+      container.className = "entity-row";
       const teacherName = [
         course.teacher_last_name,
         course.teacher_first_name,
@@ -220,8 +221,7 @@ async function loadCourses() {
 
       container.appendChild(titleElement);
       container.appendChild(infoElement);
-      container.appendChild(materialsButton);
-      container.appendChild(assignmentsButton);
+      container.appendChild(window.EduUI.createActionGroup(materialsButton, assignmentsButton));
       coursesList.appendChild(container);
     }
   } catch (error) {
@@ -250,6 +250,7 @@ async function loadMaterials(courseId, courseName) {
     }
     for (const material of data.materials) {
       const container = document.createElement("div");
+      container.className = "entity-card";
       const titleElement = document.createElement("strong");
       titleElement.textContent = material.title;
       const infoElement = document.createElement("span");
@@ -262,7 +263,7 @@ async function loadMaterials(courseId, courseName) {
       container.appendChild(titleElement);
       container.appendChild(infoElement);
       container.appendChild(descriptionElement);
-      container.appendChild(filesButton);
+      container.appendChild(window.EduUI.createActionGroup(filesButton));
       materialsList.appendChild(container);
     }
   } catch (error) {
@@ -290,6 +291,10 @@ async function loadAssignments(courseId, courseName) {
     selectedSubmissionAssignmentId = null;
     selectedSubmissionAssignmentTitle = "";
     currentSubmission = null;
+    window.EduUI?.setCalendarEvents(`student-assignments-${courseId}`, data.assignments.flatMap((assignment) => [
+      assignment.deadline ? { date: assignment.deadline, title: `Срок: ${assignment.title}`, type: "assignment" } : null,
+      assignment.grade_date ? { date: assignment.grade_date, title: `В журнале: ${assignment.title}`, type: "assignment" } : null
+    ].filter(Boolean)));
 
     if (data.assignments.length === 0) {
       assignmentsList.textContent = "Опубликованных заданий пока нет.";
@@ -297,6 +302,7 @@ async function loadAssignments(courseId, courseName) {
     }
     for (const assignment of data.assignments) {
       const container = document.createElement("div");
+      container.className = "entity-card";
 
       const titleElement = document.createElement("strong");
       titleElement.textContent = assignment.title;
@@ -322,8 +328,7 @@ async function loadAssignments(courseId, courseName) {
       container.appendChild(scoreElement);
       container.appendChild(descriptionElement);
       container.appendChild(deadlineElement);
-      container.appendChild(filesButton);
-      container.appendChild(submissionButton);
+      container.appendChild(window.EduUI.createActionGroup(filesButton, submissionButton));
       assignmentsList.appendChild(container);
     }
   } catch (error) {
