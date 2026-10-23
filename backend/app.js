@@ -31,7 +31,12 @@ app.use((request, response, next) => {
 
 app.use(
   helmet({
-    crossOriginResourcePolicy: { policy: "same-site" }
+    crossOriginResourcePolicy: { policy: "same-site" },
+    contentSecurityPolicy: {
+      directives: {
+        "upgrade-insecure-requests": config.isProduction ? [] : null
+      }
+    }
   })
 );
 
