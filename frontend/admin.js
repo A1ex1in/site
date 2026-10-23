@@ -1,6 +1,7 @@
 const apiUrl = window.location.port === "3001" ? "http://127.0.0.1:3000" : window.location.origin;
 const message = document.getElementById("message");
 const logoutButton = document.getElementById("logoutButton");
+const adminGroupForm = document.getElementById("adminGroupForm");
 const userForm = document.getElementById("userForm");
 const userRole = document.getElementById("userRole");
 const userGroup = document.getElementById("userGroup");
@@ -30,7 +31,7 @@ function updateRoleFields() {
   userGroup.required = isStudent;
 }
 
-async function loadGroups() {
+async function loadGroups(selectedId = null) {
   const groups = await api("/api/groups");
   userGroup.innerHTML = "";
   groups.forEach((group) => {
@@ -39,6 +40,7 @@ async function loadGroups() {
     option.textContent = group.name;
     userGroup.appendChild(option);
   });
+  if (selectedId) userGroup.value = String(selectedId);
 }
 
 function renderUsers(users) {
@@ -169,6 +171,29 @@ async function loadOverview() {
 
 userRole.addEventListener("change", updateRoleFields);
 userRoleFilter.addEventListener("change", loadUsers);
+
+adminGroupForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = adminGroupForm.querySelector("button[type='submit']");
+  button.disabled = true;
+  try {
+    const result = await api("/api/admin/groups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: document.getElementById("adminGroupName").value.trim(),
+        description: document.getElementById("adminGroupDescription").value.trim()
+      })
+    });
+    message.textContent = result.message;
+    adminGroupForm.reset();
+    await Promise.all([loadGroups(result.group.id), loadOverview()]);
+  } catch (error) {
+    message.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
 
 userForm.addEventListener("submit", async (event) => {
   event.preventDefault();

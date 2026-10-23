@@ -93,6 +93,26 @@ router.get("/users", async (request, response) => {
   }
 });
 
+router.post("/groups", async (request, response) => {
+  const name = normalizeText(request.body?.name, { maxLength: 100, required: true });
+  const description = normalizeText(request.body?.description, { maxLength: 1000 });
+  if (!name || description === null) {
+    return response.status(400).json({ error: "Проверьте название и описание группы" });
+  }
+  try {
+    const result = await pool.query(`
+      INSERT INTO student_groups (name, description)
+      VALUES ($1, $2)
+      RETURNING id, name, description, is_active, created_at
+    `, [name, description || null]);
+    response.status(201).json({ message: "Учебная группа создана", group: result.rows[0] });
+  } catch (error) {
+    if (error.code === "23505") return response.status(409).json({ error: "Группа с таким названием уже существует" });
+    console.error("Ошибка создания группы администратором:", error);
+    response.status(500).json({ error: "Ошибка создания учебной группы" });
+  }
+});
+
 router.post("/users", async (request, response) => {
   const role = request.body?.role;
   const email = normalizeEmail(request.body?.email);

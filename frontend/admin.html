@@ -11,6 +11,13 @@
   <button id="logoutButton" type="button">Выйти</button>
   <p id="message" role="status" aria-live="polite"></p>
 
+  <h2>Создать учебную группу</h2>
+  <form id="adminGroupForm" class="compact-admin-form">
+    <div><label for="adminGroupName">Название группы</label><input id="adminGroupName" type="text" maxlength="100" placeholder="Например, АТ-232" required></div>
+    <div><label for="adminGroupDescription">Описание</label><input id="adminGroupDescription" type="text" maxlength="1000" placeholder="Учебная группа АТ-232"></div>
+    <button type="submit">Создать группу</button>
+  </form>
+
   <h2>Добавить пользователя</h2>
   <form id="userForm" class="admin-user-form">
     <div><label for="userRole">Роль</label><select id="userRole" required><option value="teacher">Преподаватель</option><option value="student">Студент</option></select></div>
