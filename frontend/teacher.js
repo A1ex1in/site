@@ -1,4 +1,4 @@
-const apiUrl = "http://127.0.0.1:3000";
+const apiUrl = window.location.port === "3001" ? "http://127.0.0.1:3000" : window.location.origin;
 const studentsList = document.getElementById("studentsList");
 const message = document.getElementById("message");
 const logoutButton = document.getElementById("logoutButton");

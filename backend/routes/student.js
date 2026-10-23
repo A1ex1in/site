@@ -12,7 +12,8 @@ router.get("/profile",requireAuth,requireStudent,async (request, response) => {
     try {
       const result = await pool.query(
         `
-        SELECT u.id, u.email, u.first_name, u.last_name, u.middle_name, sp.student_number, g.id AS group_id, g.name AS group_name
+        SELECT u.id, u.email, u.first_name, u.last_name, u.middle_name, u.phone,
+          sp.student_number, g.id AS group_id, g.name AS group_name
         FROM users u
         JOIN student_profiles sp
           ON sp.user_id = u.id
@@ -34,6 +35,7 @@ router.get("/profile",requireAuth,requireStudent,async (request, response) => {
           firstName: student.first_name,
           lastName: student.last_name,
           middleName: student.middle_name,
+          phone: student.phone,
           studentNumber:
             student.student_number,
           group: student.group_id ? { id: student.group_id, name: student.group_name } : null
@@ -650,6 +652,65 @@ router.delete("/submission-files/:id",requireAuth,requireStudent,async (request,
     response.status(500).json({ error: "Ошибка удаления файла работы" });
   } finally {
     if (client) client.release();
+  }
+});
+
+// Получить журнал и оценки текущего студента по курсу
+router.get("/courses/:id/grades",requireAuth,requireStudent,async (request, response) => {
+  try {
+    const courseId = request.params.id;
+    if (!/^\d+$/.test(courseId)) {
+      return response.status(400).json({ error: "Некорректный идентификатор курса" });
+    }
+
+    const courseResult = await pool.query(`
+      SELECT c.id, c.academic_year, c.semester, d.name AS discipline_name, d.code AS discipline_code
+      FROM courses c
+      JOIN disciplines d ON d.id = c.discipline_id
+      JOIN student_profiles sp ON sp.group_id = c.group_id
+      WHERE c.id = $1
+        AND sp.user_id = $2
+        AND c.is_active = TRUE
+        AND d.is_active = TRUE
+    `,[courseId,request.user.id]);
+
+    if (courseResult.rowCount === 0) {
+      return response.status(404).json({ error: "Учебный курс не найден" });
+    }
+
+    const gradesResult = await pool.query(`
+      SELECT
+        gi.id AS grade_item_id,
+        gi.title,
+        gi.item_type,
+        gi.grade_date::text AS grade_date,
+        gi.max_score,
+        gi.lesson_id,
+        l.lesson_type,
+        l.topic AS lesson_topic,
+        gi.assignment_id,
+        a.title AS assignment_title,
+        g.score,
+        g.comment,
+        g.updated_at AS graded_at
+      FROM grade_items gi
+      LEFT JOIN grades g
+        ON g.grade_item_id = gi.id
+       AND g.student_id = $2
+      LEFT JOIN lessons l ON l.id = gi.lesson_id
+      LEFT JOIN assignments a ON a.id = gi.assignment_id
+      WHERE gi.course_id = $1
+        AND (gi.assignment_id IS NULL OR a.is_published = TRUE)
+      ORDER BY gi.grade_date, gi.sort_order, gi.id
+    `,[courseId,request.user.id]);
+
+    response.json({
+      course: courseResult.rows[0],
+      items: gradesResult.rows
+    });
+  } catch (error) {
+    console.error("Ошибка получения оценок студента:", error);
+    response.status(500).json({ error: "Ошибка получения оценок" });
   }
 });
 

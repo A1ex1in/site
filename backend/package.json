@@ -1,31 +1,31 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend учебной системы преподаватель-студент",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test",
     "start": "node server.js",
-    "dev:backend": "node --watch server.js",
-    "dev:frontend": "serve ../frontend -l tcp://127.0.0.1:3001",
-    "dev": "concurrently -k \"npm:dev:backend\" \"npm:dev:frontend\""
+    "dev": "node --watch server.js",
+    "check": "node scripts/check-syntax.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "argon2": "^0.45.1",
     "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.1",
     "express-session": "^1.19.0",
+    "helmet": "^8.3.0",
     "multer": "^2.3.0",
     "pg": "^8.23.0"
-  },
-  "devDependencies": {
-    "concurrently": "^10.0.5",
-    "serve": "^14.2.6"
   }
 }

@@ -7,7 +7,7 @@ async function requireAuth(request, response, next) {
   }
   try {
     const result = await pool.query(`
-      SELECT id, email, first_name, last_name, middle_name, role, status
+      SELECT id, email, first_name, last_name, middle_name, phone, role, status
       FROM users
       WHERE id = $1
       `,

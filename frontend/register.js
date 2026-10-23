@@ -1,4 +1,4 @@
-const apiUrl = "http://127.0.0.1:3000";
+const apiUrl = window.location.port === "3001" ? "http://127.0.0.1:3000" : window.location.origin;
 const form = document.getElementById("registerForm");
 const groupSelect = document.getElementById("group");
 const message = document.getElementById("message");

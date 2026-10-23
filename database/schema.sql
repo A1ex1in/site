@@ -49,6 +49,38 @@ CREATE TABLE users (
 CREATE UNIQUE INDEX users_email_unique
 ON users (LOWER(email));
 
+CREATE INDEX users_role_status_idx
+ON users (role, status);
+
+
+-- ------------------------------------------------------------
+-- Зафиксированные согласия с юридическими документами
+-- ------------------------------------------------------------
+
+CREATE TABLE legal_consents (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    document_type VARCHAR(50) NOT NULL,
+    document_version VARCHAR(50) NOT NULL,
+    accepted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip_address INET,
+    user_agent VARCHAR(500),
+
+    CONSTRAINT fk_legal_consent_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT legal_consent_document_type_check
+        CHECK (document_type IN ('privacy_policy', 'user_agreement')),
+
+    CONSTRAINT legal_consent_unique
+        UNIQUE (user_id, document_type, document_version)
+);
+
+CREATE INDEX legal_consents_user_idx
+ON legal_consents (user_id, accepted_at DESC);
+
 
 -- ------------------------------------------------------------
 -- Учебные группы
@@ -89,6 +121,9 @@ CREATE TABLE student_profiles (
     CONSTRAINT student_number_unique
         UNIQUE (student_number)
 );
+
+CREATE INDEX student_profiles_group_idx
+ON student_profiles (group_id);
 
 
 -- ------------------------------------------------------------
@@ -153,6 +188,12 @@ CREATE TABLE courses (
             semester
         )
 );
+
+CREATE INDEX courses_teacher_idx
+ON courses (teacher_id, is_active);
+
+CREATE INDEX courses_group_idx
+ON courses (group_id, is_active);
 
 -- ------------------------------------------------------------
 -- Учебные занятия
@@ -219,6 +260,9 @@ CREATE TABLE materials (
             )
         )
 );
+
+CREATE INDEX materials_course_idx
+ON materials (course_id, is_published);
 
 
 -- ------------------------------------------------------------
@@ -484,6 +528,9 @@ CREATE TABLE student_submissions (
 
 CREATE INDEX student_submissions_student_idx
 ON student_submissions (student_id);
+
+CREATE INDEX student_submissions_assignment_idx
+ON student_submissions (assignment_id, status);
 
 -- ------------------------------------------------------------
 -- Файлы работ студентов
