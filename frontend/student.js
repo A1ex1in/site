@@ -497,6 +497,7 @@ async function checkStudentAccess() {
       profile.textContent = "";
       return false;
     }
+    window.EduUI?.setUser(data.user);
     return true;
   } catch (error) {
     console.error(error);

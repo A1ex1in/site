@@ -2141,6 +2141,7 @@ async function checkTeacherAccess() {
       message.textContent = "У вас нет доступа к кабинету преподавателя.";
       return false;
     }
+    window.EduUI?.setUser(data.user);
     return true;
   } catch (error) {
     console.error(error);

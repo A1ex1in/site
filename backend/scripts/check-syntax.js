@@ -16,6 +16,7 @@ function collect(directory) {
 }
 
 collect(root);
+collect(path.resolve(root, "../frontend"));
 
 for (const file of files) {
   const result = spawnSync(process.execPath, ["--check", file], { stdio: "inherit" });

@@ -1,31 +1,32 @@
 <!DOCTYPE html>
 <html lang="ru">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Вход</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f4f8fd">
+  <title>Вход — EduPlatform</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-
-<body>
-    <h1>Вход в систему</h1>
-
-    <form id="loginForm">
-        <div>
-            <label for="email">Email</label>
-            <input id="email" type="email" autocomplete="email" required>
-        </div>
-        <div>
-            <label for="password">Пароль</label>
-            <input id="password" type="password" autocomplete="current-password" required>
-        </div>
-        <button type="submit">Войти</button>
-    </form>
-
-    <p id="message"></p>
-    <p>Нет учётной записи?<a href="register.html">Зарегистрироваться</a></p>
-
-    <script src="login.js"></script>
+<body class="auth-page">
+  <main class="auth-layout">
+    <header class="auth-brand">
+      <a class="brand" href="index.html"><span class="brand-mark" data-icon="book"></span><span>EduPlatform</span></a>
+      <p>Единая образовательная платформа</p>
+    </header>
+    <section class="auth-card" aria-labelledby="loginTitle">
+      <h1 id="loginTitle">Авторизация</h1>
+      <p class="auth-lead">Войдите в свой аккаунт, чтобы продолжить обучение и получить доступ к курсам.</p>
+      <form id="loginForm" class="auth-form">
+        <div class="field"><label for="email">E-mail</label><div class="input-shell"><span class="field-icon" data-icon="user"></span><input id="email" type="email" autocomplete="email" placeholder="Введите e-mail" required></div></div>
+        <div class="field"><label for="password">Пароль</label><div class="input-shell"><span class="field-icon" data-icon="lock"></span><input id="password" data-password type="password" autocomplete="current-password" placeholder="Введите пароль" required><button class="password-toggle" type="button" data-password-toggle="password" aria-label="Показать пароль"></button></div></div>
+        <p id="message" class="form-message" role="status" aria-live="polite"></p>
+        <button class="primary-button" type="submit">Войти</button>
+      </form>
+      <p class="auth-switch">Ещё нет аккаунта? <a href="register.html">Регистрация</a></p>
+    </section>
+    <footer class="auth-footer"><nav><a href="privacy.html">Конфиденциальность</a><a href="agreement.html">Правила платформы</a></nav><span>© 2026 EduPlatform</span></footer>
+  </main>
+  <script src="ui.js"></script>
+  <script src="login.js"></script>
 </body>
 </html>

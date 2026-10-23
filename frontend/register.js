@@ -36,12 +36,26 @@ form.addEventListener("submit", async (event) => {
   const firstName = document.getElementById("firstName").value.trim();
   const lastName = document.getElementById("lastName").value.trim();
   const middleName = document.getElementById("middleName").value.trim();
+  const phone = document.getElementById("phone").value.trim();
   const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
   const passwordRepeat = document.getElementById("passwordRepeat").value;
   const groupId = groupSelect.value;
   const studentNumber = document.getElementById("studentNumber").value.trim();
-  const requestBody = {firstName, lastName, middleName, email, password, groupId, studentNumber};
+  const privacyPolicyAccepted = document.getElementById("privacyPolicyAccepted").checked;
+  const userAgreementAccepted = document.getElementById("userAgreementAccepted").checked;
+  const requestBody = {
+    firstName,
+    lastName,
+    middleName,
+    phone,
+    email,
+    password,
+    groupId,
+    studentNumber,
+    privacyPolicyAccepted,
+    userAgreementAccepted
+  };
   if (password !== passwordRepeat) {
     message.textContent = "Пароли не совпадают.";
     return;

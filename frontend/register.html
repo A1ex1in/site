@@ -1,56 +1,42 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Регистрация студента</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f4f8fd">
+  <title>Регистрация — EduPlatform</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-
-<body>
-    <h1>Регистрация студента</h1>
-
-    <form id="registerForm">
-        <div>
-            <label for="lastName">Фамилия</label>
-            <input id="lastName" type="text" required>
+<body class="auth-page">
+  <main class="auth-layout">
+    <header class="auth-brand"><a class="brand" href="index.html"><span class="brand-mark" data-icon="book"></span><span>EduPlatform</span></a><p>Образование ближе к твоим целям</p></header>
+    <section class="auth-card auth-card--wide" aria-labelledby="registerTitle">
+      <h1 id="registerTitle">Регистрация</h1>
+      <p class="auth-lead">Создайте аккаунт, чтобы получить доступ к курсам, заданиям и возможностям платформы.</p>
+      <form id="registerForm" class="auth-form">
+        <div class="form-grid form-grid--two">
+          <div class="field"><label for="lastName">Фамилия</label><input id="lastName" type="text" autocomplete="family-name" placeholder="Иванов" required></div>
+          <div class="field"><label for="firstName">Имя</label><input id="firstName" type="text" autocomplete="given-name" placeholder="Иван" required></div>
+          <div class="field"><label for="middleName">Отчество</label><input id="middleName" type="text" autocomplete="additional-name" placeholder="Иванович"></div>
+          <div class="field"><label for="phone">Телефон</label><input id="phone" type="tel" autocomplete="tel" placeholder="+7 900 000-00-00"></div>
+          <div class="field field--full"><label for="email">E-mail</label><div class="input-shell"><span class="field-icon" data-icon="mail"></span><input id="email" type="email" autocomplete="email" placeholder="student@example.ru" required></div></div>
+          <div class="field"><label for="group">Группа</label><select id="group" required><option value="">Загрузка групп...</option></select></div>
+          <div class="field"><label for="studentNumber">Номер студента</label><input id="studentNumber" type="text" placeholder="Например, 231042"></div>
+          <div class="field"><label for="password">Пароль</label><div class="input-shell"><span class="field-icon" data-icon="lock"></span><input id="password" data-password type="password" autocomplete="new-password" placeholder="Не менее 8 символов" required><button class="password-toggle" type="button" data-password-toggle="password" aria-label="Показать пароль"></button></div></div>
+          <div class="field"><label for="passwordRepeat">Подтверждение пароля</label><div class="input-shell"><span class="field-icon" data-icon="lock"></span><input id="passwordRepeat" data-password type="password" autocomplete="new-password" placeholder="Повторите пароль" required><button class="password-toggle" type="button" data-password-toggle="passwordRepeat" aria-label="Показать пароль"></button></div></div>
         </div>
-        <div>
-            <label for="firstName">Имя</label>
-            <input id="firstName" type="text" required>
+        <div class="consents">
+          <label class="check-row"><input id="privacyPolicyAccepted" type="checkbox" required><span>Я ознакомился с <a href="privacy.html" target="_blank">политикой обработки персональных данных</a> и даю согласие на обработку данных.</span></label>
+          <label class="check-row"><input id="userAgreementAccepted" type="checkbox" required><span>Я принимаю <a href="agreement.html" target="_blank">пользовательское соглашение</a> и правила использования необходимых cookie.</span></label>
         </div>
-        <div>
-            <label for="middleName">Отчество</label>
-            <input id="middleName" type="text" required>
-        </div>
-        <div>
-            <label for="email">Email</label>
-            <input id="email" type="email" required>
-        </div>
-        <div>
-            <label for="password">Пароль</label>
-            <input id="password" type="password" required>
-        </div>
-        <div>
-            <label for="passwordRepeat">Повторите пароль</label>
-            <input id="passwordRepeat" type="password" required>
-        </div>
-        <div>
-            <label for="group">Группа</label>
-            <select id="group" required>
-                <option value="">
-                    Загрузка групп...
-                </option>
-            </select>
-        </div>
-        <div>
-            <label for="studentNumber">Номер студента</label>
-            <input id="studentNumber" type="text">
-        </div>
-        <button type="submit">Зарегистрироваться</button>
-    </form>
-
-    <p id="message"></p>
-    <script src="register.js"></script>
+        <p id="message" class="form-message" role="status" aria-live="polite"></p>
+        <button class="primary-button" type="submit">Отправить заявку на регистрацию <span aria-hidden="true">→</span></button>
+      </form>
+      <p class="auth-switch">Уже есть аккаунт? <a href="login.html">Вернуться ко входу</a></p>
+    </section>
+    <footer class="auth-footer"><span>© 2026 EduPlatform</span></footer>
+  </main>
+  <script src="ui.js"></script>
+  <script src="register.js"></script>
 </body>
 </html>
