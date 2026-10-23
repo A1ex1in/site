@@ -9,6 +9,7 @@
 -- ------------------------------------------------------------
 
 CREATE TYPE user_role AS ENUM (
+    'admin',
     'teacher',
     'student'
 );
@@ -216,6 +217,45 @@ CREATE TABLE lessons (
 
 CREATE INDEX lessons_course_date_idx
 ON lessons (course_id, lesson_date);
+
+-- ------------------------------------------------------------
+-- Посещаемость занятий
+-- ------------------------------------------------------------
+CREATE TYPE attendance_status AS ENUM (
+    'present',
+    'absent',
+    'late',
+    'excused'
+);
+
+CREATE TABLE lesson_attendance (
+    lesson_id BIGINT NOT NULL,
+    student_id BIGINT NOT NULL,
+    status attendance_status NOT NULL,
+    marked_by BIGINT NOT NULL,
+    comment VARCHAR(500),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (lesson_id, student_id),
+
+    CONSTRAINT fk_attendance_lesson
+        FOREIGN KEY (lesson_id)
+        REFERENCES lessons(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_attendance_student
+        FOREIGN KEY (student_id)
+        REFERENCES student_profiles(user_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_attendance_teacher
+        FOREIGN KEY (marked_by)
+        REFERENCES users(id)
+);
+
+CREATE INDEX lesson_attendance_student_idx
+ON lesson_attendance (student_id, status);
 
 -- ------------------------------------------------------------
 -- Сессии пользователей

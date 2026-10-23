@@ -22,6 +22,10 @@ form.addEventListener("submit", async (event) => {
       return;
     }
     const user = data.user;
+    if (user.role === "admin") {
+      window.location.href = "admin.html";
+      return;
+    }
     if (user.role === "teacher") {
       window.location.href = "teacher.html";
       return;

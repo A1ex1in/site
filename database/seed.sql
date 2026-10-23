@@ -7,6 +7,33 @@
 
 BEGIN;
 
+-- ------------------------------------------------------------
+-- Тестовый администратор
+-- Email: admin@example.local
+-- Пароль: Admin123!
+-- ------------------------------------------------------------
+
+INSERT INTO users (
+    email,
+    password_hash,
+    first_name,
+    last_name,
+    role,
+    status
+)
+SELECT
+    'admin@example.local',
+    '$argon2id$v=19$m=65536,p=4,t=3$HMZ1lEg7Al3QBAzPycp95Q$oWapGu0rZiz3qaowX/eyu9ruzo1ki4aMmbicY4RB5ro',
+    'Администратор',
+    'Системы',
+    'admin',
+    'active'
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM users
+    WHERE LOWER(email) = LOWER('admin@example.local')
+);
+
 
 -- ------------------------------------------------------------
 -- Учебная группа

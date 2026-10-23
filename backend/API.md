@@ -115,10 +115,18 @@
 - `GET /courses/:id/journal`
 - `GET /courses/:id/grades`
 - `GET|POST /courses/:id/lessons`
+- `GET|PUT /lessons/:lessonId/attendance`
 - `PATCH|DELETE /lessons/:lessonId`
 - `GET|POST /lessons/:lessonId/grade-items`
 - `PATCH|DELETE /grade-items/:gradeItemId`
 - `PUT /grade-items/:gradeItemId/students/:studentId/grade`
+
+## Кабинет администратора — `/admin`
+
+- `GET /overview` — сводка, посещаемость по группам и нагрузка преподавателей.
+- `GET /users?role=teacher|student` — список управляемых пользователей.
+- `POST /users` — создать активного преподавателя или студента.
+- `PATCH /users/:id/status` — заблокировать или разблокировать пользователя.
 
 ## Основные коды ответа
 

@@ -54,9 +54,19 @@ function requireStudent(request, response, next) {
   next();
 }
 
+function requireAdmin(request, response, next) {
+  if (request.user.role !== "admin") {
+    return response.status(403).json({
+      error: "Доступ разрешён только администратору"
+    });
+  }
+  next();
+}
+
 
 module.exports = {
   requireAuth,
   requireTeacher,
-  requireStudent
+  requireStudent,
+  requireAdmin
 };

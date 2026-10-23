@@ -43,6 +43,9 @@
   }
 
   function getNavigation(role) {
+    if (role === "admin") {
+      return [["Главная","home","#dashboardOverview"],["Пользователи","users","#userForm"],["Список аккаунтов","user","#adminUsersSection"],["Нагрузка","chart","#teacherLoadSection"],["Посещаемость","calendar","#attendanceSection"]];
+    }
     return role === "teacher"
       ? [["Главная","home","#dashboardOverview"],["Курсы","book","#courseForm"],["Материалы","folder","#courseMaterialsSection"],["Задания","task","#courseAssignmentsSection"],["Журнал","chart","#journalSection"],["Студенты","users","#studentsList"],["Группы","calendar","#groupForm"]]
       : [["Главная","home","#dashboardOverview"],["Мои курсы","book","#coursesList"],["Материалы","folder","#courseMaterialsSection"],["Задания","task","#courseAssignmentsSection"],["Мой профиль","user","#profile"]];
@@ -195,7 +198,7 @@
 
   function initDashboard() {
     const role = document.body.dataset.role || "student";
-    const roleLabel = role === "teacher" ? "Преподаватель" : "Студент";
+    const roleLabel = role === "admin" ? "Администратор" : role === "teacher" ? "Преподаватель" : "Студент";
     const contentNodes = Array.from(document.body.childNodes).filter((node) => node.nodeName !== "SCRIPT");
     const shell = document.createElement("div");
     shell.className = "app-shell";
@@ -203,20 +206,20 @@
     shell.innerHTML = `
       <aside class="app-sidebar" aria-label="Основная навигация">
         <div class="brand brand--light"><span class="brand-mark">${icons.book}</span><span>EduPlatform</span></div>
-        <div class="sidebar-user"><div class="user-avatar" id="sidebarAvatar">${role === "teacher" ? "П" : "С"}</div><div class="user-meta"><strong id="sidebarName">Личный кабинет</strong><span>${roleLabel}</span></div></div>
+        <div class="sidebar-user"><div class="user-avatar" id="sidebarAvatar">${role === "admin" ? "А" : role === "teacher" ? "П" : "С"}</div><div class="user-meta"><strong id="sidebarName">Личный кабинет</strong><span>${roleLabel}</span></div></div>
         <nav class="sidebar-nav">${navigation}</nav>
         <button class="sidebar-logout" id="sidebarLogout" type="button">${icons.logout}<span>Выйти</span></button>
       </aside>
       <button class="sidebar-backdrop" type="button" aria-label="Закрыть меню"></button>
       <main class="workspace">
-        <header class="workspace-header"><button class="menu-toggle" type="button" aria-label="Открыть меню">${icons.menu}</button><div class="workspace-title"><h1 id="welcomeTitle">Добро пожаловать!</h1><p>${role === "teacher" ? "Управляйте курсами, заданиями и учебной активностью студентов." : "Ваши курсы, задания и результаты собраны в одном месте."}</p></div></header>
+        <header class="workspace-header"><button class="menu-toggle" type="button" aria-label="Открыть меню">${icons.menu}</button><div class="workspace-title"><h1 id="welcomeTitle">Добро пожаловать!</h1><p>${role === "admin" ? "Управляйте пользователями и следите за показателями платформы." : role === "teacher" ? "Управляйте курсами, заданиями и учебной активностью студентов." : "Ваши курсы, задания и результаты собраны в одном месте."}</p></div></header>
         <div class="dashboard-layout">
           <div class="dashboard-main">
             <section class="overview-panel" id="dashboardOverview"><div class="stat-grid">
-              <article class="stat-card"><span class="stat-icon">${icons.book}</span><span><strong class="stat-value" id="statCourses">—</strong><span class="stat-label">${role === "teacher" ? "Учебных курсов" : "Моих курсов"}</span></span></article>
-              <article class="stat-card"><span class="stat-icon">${icons.users}</span><span><strong class="stat-value" id="statPeople">—</strong><span class="stat-label">${role === "teacher" ? "Заявок студентов" : "Учебная группа"}</span></span></article>
-              <article class="stat-card"><span class="stat-icon">${icons.task}</span><span><strong class="stat-value" id="statTasks">—</strong><span class="stat-label">Активных заданий</span></span></article>
-              <article class="stat-card"><span class="stat-icon">${icons.chart}</span><span><strong class="stat-value">100%</strong><span class="stat-label">Система доступна</span></span></article>
+              <article class="stat-card"><span class="stat-icon">${icons.book}</span><span><strong class="stat-value" id="statCourses">—</strong><span class="stat-label">${role === "admin" ? "Пользователей" : role === "teacher" ? "Учебных курсов" : "Моих курсов"}</span></span></article>
+              <article class="stat-card"><span class="stat-icon">${icons.users}</span><span><strong class="stat-value" id="statPeople">—</strong><span class="stat-label">${role === "admin" ? "Преподавателей" : role === "teacher" ? "Заявок студентов" : "Учебная группа"}</span></span></article>
+              <article class="stat-card"><span class="stat-icon">${icons.task}</span><span><strong class="stat-value" id="statTasks">—</strong><span class="stat-label">${role === "admin" ? "Посещаемость" : "Активных заданий"}</span></span></article>
+              <article class="stat-card"><span class="stat-icon">${icons.chart}</span><span><strong class="stat-value" id="statSystem">${role === "admin" ? "—" : "100%"}</strong><span class="stat-label">${role === "admin" ? "Учебных курсов" : "Система доступна"}</span></span></article>
             </div></section>
             <div class="content-stack"></div>
           </div>
@@ -228,7 +231,7 @@
             </section>
             <section class="rail-card"><h2 class="rail-card-title" id="eventsTitle">События</h2><div class="rail-list" id="calendarEvents"><p class="rail-empty">На выбранную дату событий нет.</p></div></section>
             <section class="rail-card"><h2 class="rail-card-title">Уведомления</h2><div class="rail-list" id="railNotifications"><p class="rail-empty">Новых уведомлений нет.</p></div></section>
-            <section class="rail-card"><h2 class="rail-card-title">Быстрые действия</h2><div class="quick-actions">${role === "teacher" ? '<button class="quick-action" data-quick-target="#courseForm">Создать курс</button><button class="quick-action" data-quick-target="#assignmentForm">Создать задание</button><button class="quick-action" data-quick-target="#materialForm">Добавить материал</button><button class="quick-action" data-quick-target="#groupForm">Добавить группу</button>' : '<button class="quick-action" data-quick-target="#coursesList">Мои курсы</button><button class="quick-action" data-quick-target="#courseAssignmentsSection">Задания</button><button class="quick-action" data-quick-target="#courseMaterialsSection">Материалы</button><button class="quick-action" data-quick-target="#profile">Профиль</button>'}</div></section>
+            <section class="rail-card"><h2 class="rail-card-title">Быстрые действия</h2><div class="quick-actions">${role === "admin" ? '<button class="quick-action" data-quick-target="#userForm">Добавить пользователя</button><button class="quick-action" data-quick-target="#adminUsersSection">Все аккаунты</button><button class="quick-action" data-quick-target="#teacherLoadSection">Нагрузка</button><button class="quick-action" data-quick-target="#attendanceSection">Посещаемость</button>' : role === "teacher" ? '<button class="quick-action" data-quick-target="#courseForm">Создать курс</button><button class="quick-action" data-quick-target="#assignmentForm">Создать задание</button><button class="quick-action" data-quick-target="#materialForm">Добавить материал</button><button class="quick-action" data-quick-target="#groupForm">Добавить группу</button>' : '<button class="quick-action" data-quick-target="#coursesList">Мои курсы</button><button class="quick-action" data-quick-target="#courseAssignmentsSection">Задания</button><button class="quick-action" data-quick-target="#courseMaterialsSection">Материалы</button><button class="quick-action" data-quick-target="#profile">Профиль</button>'}</div></section>
           </aside>
         </div>
       </main>`;
@@ -266,6 +269,7 @@
     shell.querySelector("#sidebarLogout").addEventListener("click", () => document.getElementById("logoutButton")?.click());
 
     const updateCounts = () => {
+      if (role === "admin") return;
       const count = (selector) => {
         const element = document.querySelector(selector);
         if (!element || /Загрузка|пока|Нет /.test(element.textContent)) return 0;

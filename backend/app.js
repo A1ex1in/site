@@ -14,6 +14,7 @@ const studentRoutes = require("./routes/student");
 const studentsRoutes =  require("./routes/students");
 const teacherRoutes = require("./routes/teacher");
 const teacherManagementRoutes = require("./routes/teacherManagement");
+const adminRoutes = require("./routes/admin");
 const app = express();
 
 app.disable("x-powered-by");
@@ -125,6 +126,11 @@ app.use(
 app.use(
   "/api/teacher",
   teacherManagementRoutes
+);
+
+app.use(
+  "/api/admin",
+  adminRoutes
 );
 
 app.use("/api", (request, response) => {

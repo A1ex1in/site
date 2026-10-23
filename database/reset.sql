@@ -18,6 +18,7 @@ BEGIN;
 TRUNCATE TABLE
   user_sessions,
   legal_consents,
+  lesson_attendance,
   submission_files,
   student_submissions,
   grades,

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Панель администратора — EduPlatform</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="dashboard-page" data-role="admin">
+  <h1>Панель администратора</h1>
+  <button id="logoutButton" type="button">Выйти</button>
+  <p id="message" role="status" aria-live="polite"></p>
+
+  <h2>Добавить пользователя</h2>
+  <form id="userForm" class="admin-user-form">
+    <div><label for="userRole">Роль</label><select id="userRole" required><option value="teacher">Преподаватель</option><option value="student">Студент</option></select></div>
+    <div><label for="userEmail">E-mail</label><input id="userEmail" type="email" autocomplete="off" required></div>
+    <div><label for="userLastName">Фамилия</label><input id="userLastName" type="text" maxlength="100" required></div>
+    <div><label for="userFirstName">Имя</label><input id="userFirstName" type="text" maxlength="100" required></div>
+    <div><label for="userMiddleName">Отчество</label><input id="userMiddleName" type="text" maxlength="100"></div>
+    <div><label for="userPhone">Телефон</label><input id="userPhone" type="tel" maxlength="30"></div>
+    <div><label for="userPassword">Временный пароль</label><input id="userPassword" type="password" minlength="10" placeholder="Не менее 10 символов" required></div>
+    <div class="student-only" hidden><label for="userGroup">Учебная группа</label><select id="userGroup"></select></div>
+    <div class="student-only" hidden><label for="userStudentNumber">Номер студента</label><input id="userStudentNumber" type="text" maxlength="50"></div>
+    <button type="submit">Добавить пользователя</button>
+  </form>
+
+  <section id="adminUsersSection">
+    <div class="section-heading"><h2>Пользователи</h2><label>Показать <select id="userRoleFilter"><option value="">Всех</option><option value="teacher">Преподавателей</option><option value="student">Студентов</option></select></label></div>
+    <div id="adminUsersList">Загрузка...</div>
+  </section>
+
+  <section id="teacherLoadSection">
+    <h2>Нагрузка преподавателей</h2>
+    <div class="table-shell"><table><thead><tr><th>Преподаватель</th><th>Курсы</th><th>Группы</th><th>Студенты</th><th>Занятия</th><th>Задания</th></tr></thead><tbody id="teacherLoadBody"></tbody></table></div>
+  </section>
+
+  <section id="attendanceSection">
+    <h2>Посещаемость по группам</h2>
+    <p class="section-note">Показатель считается по отметкам, которые преподаватели сохраняют в занятиях. Опоздание учитывается как посещение, уважительная причина исключается из расчёта.</p>
+    <div id="attendanceGroups"></div>
+  </section>
+
+  <section id="accountStatusSection">
+    <h2>Состояние учётных записей</h2>
+    <div id="accountStatusGrid" class="mini-stat-grid"></div>
+  </section>
+
+  <script src="ui.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

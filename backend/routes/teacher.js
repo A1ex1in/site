@@ -7,6 +7,7 @@ const uploadMaterialFile = require("../middleware/materialUpload");
 const path = require("path");
 const config = require("../config");
 const uploadAssignmentFile = require("../middleware/assignmentUpload");
+const { parseId, normalizeText } = require("../lib/validation");
 
 // Создать учебный материал
 router.post("/courses/:id/materials",requireAuth,requireTeacher,async (request, response) => {
@@ -1768,6 +1769,97 @@ router.get("/courses/:id/lessons",requireAuth,requireTeacher,async (request, res
   } catch (error) {
     console.error("Ошибка получения занятий курса:", error);
     response.status(500).json({ error: "Ошибка получения занятий курса" });
+  }
+});
+
+// Получить ведомость посещаемости занятия
+router.get("/lessons/:lessonId/attendance",requireAuth,requireTeacher,async (request, response) => {
+  const lessonId = parseId(request.params.lessonId);
+  if (!lessonId) return response.status(400).json({ error: "Некорректный идентификатор занятия" });
+  try {
+    const lessonResult = await pool.query(`
+      SELECT l.id, l.lesson_date::text AS lesson_date, l.topic, c.group_id, g.name AS group_name
+      FROM lessons l
+      JOIN courses c ON c.id = l.course_id
+      JOIN student_groups g ON g.id = c.group_id
+      WHERE l.id = $1 AND c.teacher_id = $2
+    `, [lessonId, request.user.id]);
+    if (lessonResult.rowCount === 0) return response.status(404).json({ error: "Занятие не найдено" });
+    const lesson = lessonResult.rows[0];
+    const students = await pool.query(`
+      SELECT u.id, u.last_name, u.first_name, u.middle_name, sp.student_number,
+        la.status, la.comment
+      FROM student_profiles sp
+      JOIN users u ON u.id = sp.user_id
+      LEFT JOIN lesson_attendance la ON la.lesson_id = $1 AND la.student_id = u.id
+      WHERE sp.group_id = $2 AND u.role = 'student' AND u.status IN ('active','blocked')
+      ORDER BY u.last_name, u.first_name, u.middle_name
+    `, [lessonId, lesson.group_id]);
+    response.json({ lesson, students: students.rows });
+  } catch (error) {
+    console.error("Ошибка получения посещаемости:", error);
+    response.status(500).json({ error: "Ошибка получения посещаемости" });
+  }
+});
+
+// Сохранить ведомость посещаемости занятия
+router.put("/lessons/:lessonId/attendance",requireAuth,requireTeacher,async (request, response) => {
+  const lessonId = parseId(request.params.lessonId);
+  const records = request.body?.records;
+  const allowedStatuses = new Set(["present", "absent", "late", "excused"]);
+  if (!lessonId || !Array.isArray(records) || records.length > 500) {
+    return response.status(400).json({ error: "Некорректная ведомость посещаемости" });
+  }
+  const normalized = records.map((record) => ({
+    studentId: parseId(record?.studentId),
+    status: record?.status,
+    comment: normalizeText(record?.comment, { maxLength: 500 })
+  }));
+  if (normalized.some((record) => !record.studentId || !allowedStatuses.has(record.status) || record.comment === null)) {
+    return response.status(400).json({ error: "Проверьте отметки посещаемости" });
+  }
+
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query("BEGIN");
+    const lessonResult = await client.query(`
+      SELECT c.group_id
+      FROM lessons l JOIN courses c ON c.id = l.course_id
+      WHERE l.id = $1 AND c.teacher_id = $2
+      FOR UPDATE OF l
+    `, [lessonId, request.user.id]);
+    if (lessonResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return response.status(404).json({ error: "Занятие не найдено" });
+    }
+    for (const record of normalized) {
+      const student = await client.query(`
+        SELECT 1 FROM student_profiles sp JOIN users u ON u.id = sp.user_id
+        WHERE sp.user_id = $1 AND sp.group_id = $2 AND u.role = 'student'
+      `, [record.studentId, lessonResult.rows[0].group_id]);
+      if (student.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return response.status(400).json({ error: "Студент не относится к группе этого занятия" });
+      }
+      await client.query(`
+        INSERT INTO lesson_attendance (lesson_id, student_id, status, marked_by, comment)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (lesson_id, student_id) DO UPDATE SET
+          status = EXCLUDED.status,
+          marked_by = EXCLUDED.marked_by,
+          comment = EXCLUDED.comment,
+          updated_at = CURRENT_TIMESTAMP
+      `, [lessonId, record.studentId, record.status, request.user.id, record.comment || null]);
+    }
+    await client.query("COMMIT");
+    response.json({ message: "Посещаемость сохранена" });
+  } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(() => {});
+    console.error("Ошибка сохранения посещаемости:", error);
+    response.status(500).json({ error: "Ошибка сохранения посещаемости" });
+  } finally {
+    if (client) client.release();
   }
 });
 

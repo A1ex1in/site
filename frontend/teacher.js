@@ -77,6 +77,10 @@ const lessonDate = document.getElementById("lessonDate");
 const lessonType = document.getElementById("lessonType");
 const lessonTopic = document.getElementById("lessonTopic");
 const lessonsList = document.getElementById("lessonsList");
+const attendanceEditorSection = document.getElementById("attendanceEditorSection");
+const attendanceEditorTitle = document.getElementById("attendanceEditorTitle");
+const attendanceForm = document.getElementById("attendanceForm");
+const attendanceStudentsList = document.getElementById("attendanceStudentsList");
 const gradeItemsSection = document.getElementById("gradeItemsSection");
 const gradeItemsTitle = document.getElementById("gradeItemsTitle");
 const gradeItemForm = document.getElementById("gradeItemForm");
@@ -104,6 +108,7 @@ let selectedSubmissionsAssignmentTitle = "";
 let selectedLessonsCourseId = null;
 let selectedLessonsCourseName = "";
 let selectedLessonId = null;
+let selectedAttendanceLessonId = null;
 let selectedLessonTitle = "";
 
 materialForm.addEventListener("submit",async (event) => {
@@ -1416,6 +1421,7 @@ async function loadLessons(courseId, courseName = "") {
 
     journalSection.hidden = true;
     gradeItemsSection.hidden = true;
+    attendanceEditorSection.hidden = true;
     courseLessonsSection.hidden = false;
 
     courseLessonsTitle.textContent = `Занятия курса: ${courseName}`;
@@ -1460,6 +1466,13 @@ async function loadLessons(courseId, courseName = "") {
       gradeItemsButton.addEventListener("click",async () => {
         const lessonTitle = `${lesson.lesson_date.split("-").reverse().join(".")} — ${lesson.topic || "Без темы"}`;
         await loadGradeItems(lesson.id,lessonTitle);
+      });
+
+      const attendanceButton = document.createElement("button");
+      attendanceButton.type = "button";
+      attendanceButton.textContent = "Посещаемость";
+      attendanceButton.addEventListener("click", async () => {
+        await loadAttendance(lesson.id);
       });
 
       // Кнопка изменения занятия
@@ -1617,7 +1630,7 @@ async function loadLessons(courseId, courseName = "") {
       container.appendChild(dateElement);
       container.appendChild(typeElement);
       container.appendChild(topicElement);
-      container.appendChild(window.EduUI.createActionGroup(gradeItemsButton, editButton, deleteButton));
+      container.appendChild(window.EduUI.createActionGroup(attendanceButton, gradeItemsButton, editButton, deleteButton));
       container.appendChild(editForm);
 
       lessonsList.appendChild(container);
@@ -1627,6 +1640,81 @@ async function loadLessons(courseId, courseName = "") {
     message.textContent = "Не удалось загрузить занятия.";
   }
 }
+
+async function loadAttendance(lessonId) {
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/lessons/${lessonId}/attendance`, { credentials: "include" });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка получения посещаемости.";
+      return;
+    }
+    selectedAttendanceLessonId = lessonId;
+    gradeItemsSection.hidden = true;
+    attendanceEditorTitle.textContent = `Посещаемость: ${data.lesson.lesson_date.split("-").reverse().join(".")} — ${data.lesson.topic || "Без темы"} — ${data.lesson.group_name}`;
+    attendanceStudentsList.innerHTML = "";
+    if (data.students.length === 0) {
+      attendanceStudentsList.textContent = "В группе пока нет студентов.";
+    }
+    const options = { present: "Присутствовал", absent: "Отсутствовал", late: "Опоздал", excused: "Уважительная причина" };
+    data.students.forEach((student) => {
+      const row = document.createElement("div");
+      row.className = "attendance-editor-row";
+      row.dataset.studentId = student.id;
+      const name = document.createElement("strong");
+      name.textContent = `${[student.last_name, student.first_name, student.middle_name].filter(Boolean).join(" ")} — ${student.student_number || "без номера"}`;
+      const select = document.createElement("select");
+      select.className = "attendance-status";
+      Object.entries(options).forEach(([value, label]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        select.appendChild(option);
+      });
+      select.value = student.status || "present";
+      const comment = document.createElement("input");
+      comment.className = "attendance-comment";
+      comment.type = "text";
+      comment.maxLength = 500;
+      comment.placeholder = "Комментарий (необязательно)";
+      comment.value = student.comment || "";
+      row.append(name, select, comment);
+      attendanceStudentsList.appendChild(row);
+    });
+    attendanceEditorSection.hidden = false;
+    attendanceEditorSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    console.error("Ошибка загрузки посещаемости:", error);
+    message.textContent = "Не удалось загрузить посещаемость.";
+  }
+}
+
+attendanceForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!selectedAttendanceLessonId) return;
+  const button = attendanceForm.querySelector("button[type='submit']");
+  const records = Array.from(attendanceStudentsList.querySelectorAll(".attendance-editor-row")).map((row) => ({
+    studentId: row.dataset.studentId,
+    status: row.querySelector(".attendance-status").value,
+    comment: row.querySelector(".attendance-comment").value.trim()
+  }));
+  button.disabled = true;
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/lessons/${selectedAttendanceLessonId}/attendance`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ records })
+    });
+    const data = await response.json();
+    message.textContent = response.ok ? data.message : data.error || "Ошибка сохранения посещаемости.";
+  } catch (error) {
+    console.error("Ошибка сохранения посещаемости:", error);
+    message.textContent = "Не удалось сохранить посещаемость.";
+  } finally {
+    button.disabled = false;
+  }
+});
 
 async function loadGradeItems(lessonId, lessonTitle = "") {
   try {
@@ -1644,6 +1732,7 @@ async function loadGradeItems(lessonId, lessonTitle = "") {
     selectedLessonId = lessonId;
     selectedLessonTitle = lessonTitle;
 
+    attendanceEditorSection.hidden = true;
     gradeItemsSection.hidden = false;
     gradeItemsTitle.textContent = `Оценивания: ${lessonTitle}`;
     gradeItemsList.innerHTML = "";
