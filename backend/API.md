@@ -110,6 +110,7 @@
 
 ### Работы и журнал
 
+- `GET /submissions/recent` — последние присланные работы текущего преподавателя, ожидающие проверки.
 - `GET /assignments/:assignmentId/submissions`
 - `GET /submissions/:submissionId/files`
 - `GET /submission-files/:id/download`

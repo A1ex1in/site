@@ -78,7 +78,7 @@
         <div id="disciplinesList">
             Загрузка дисциплин...
         </div>
-        <h2>Учебные курсы</h2>
+        <h2>Дисциплина/МДК</h2>
 
         <form id="courseForm">
             <div>
@@ -100,7 +100,7 @@
                     <option value="2">2</option>
                 </select>
             </div>
-            <button type="submit">Создать курс</button>
+            <button type="submit">Создать группу</button>
         </form>
 
         <div id="coursesList">
@@ -108,29 +108,29 @@
         </div>
 
         <section id="courseLessonsSection" hidden>
-            <h2 id="courseLessonsTitle">Занятия курса</h2>
+            <h2 id="courseLessonsTitle">Темы дисциплины</h2>
 
-            <h3>Модули курса</h3>
+            <h3>Модули дисциплины</h3>
             <form id="moduleForm">
                 <div>
-                    <label for="moduleTitle">Название модуля</label>
+                    <label for="moduleTitle">Название раздела</label>
                     <input id="moduleTitle" type="text" maxlength="255" placeholder="Например, Введение" required>
                 </div>
                 <div>
                     <label for="moduleDescription">Описание</label>
-                    <input id="moduleDescription" type="text" maxlength="4000" placeholder="Коротко о содержании модуля">
+                    <input id="moduleDescription" type="text" maxlength="4000" placeholder="Коротко о содержании раздела">
                 </div>
-                <button type="submit">Создать модуль</button>
+                <button type="submit">Создать раздел</button>
             </form>
             <div id="modulesList"></div>
 
-            <h3>Создать занятие</h3>
+            <h3>Добавить тему</h3>
 
             <form id="lessonForm">
                 <div>
-                    <label for="lessonModule">Модуль</label>
+                    <label for="lessonModule">Раздел</label>
                     <select id="lessonModule">
-                        <option value="">Без модуля</option>
+                        <option value="">Без раздела</option>
                     </select>
                 </div>
 
@@ -155,10 +155,10 @@
                     <input id="lessonTopic" type="text" maxlength="255">
                 </div>
 
-                <button type="submit">Создать занятие</button>
+                <button type="submit">Добавить тему</button>
             </form>
 
-            <h3>Список занятий</h3>
+            <h3>Темы дисциплины</h3>
             <div id="lessonsList"></div>
         </section>
 
@@ -204,14 +204,14 @@
           <div id="gradeItemsList"></div>
         </section>
 
-    <h2>Материалы курса</h2>
+    <h2>Материалы дисциплины</h2>
 
         <section id="courseMaterialsSection" hidden>
-            <h2 id="courseMaterialsTitle">Материалы курса</h2>
+            <h2 id="courseMaterialsTitle">Материалы дисциплины</h2>
 
             <form id="materialForm">
                 <div>
-                    <label for="materialTitle">Название</label>
+                    <label for="materialTitle">Название материала</label>
                     <input id="materialTitle" type="text" required>
                 </div>
                 <div>
@@ -220,13 +220,14 @@
                         <option value="lecture">Лекция</option>
                         <option value="presentation">Презентация</option>
                         <option value="methodical">Методический материал</option>
+                        <option value="self_study">Самостоятельная работа</option>
                         <option value="other">Прочее</option>
                     </select>
                 </div>
                 <div>
-                    <label for="materialLesson">Занятие</label>
+                    <label for="materialLesson">Тема</label>
                     <select id="materialLesson">
-                        <option value="">Общий материал курса</option>
+                        <option value="">Общий материал дисциплины</option>
                     </select>
                 </div>
                 <div>
@@ -254,14 +255,14 @@
             </div>
         </section>
 
-    <h2>Задания курса</h2>
+    <h2>Задания дисциплины</h2>
 
         <section id="courseAssignmentsSection" hidden>
-            <h2 id="courseAssignmentsTitle">Задания курса</h2>
+            <h2 id="courseAssignmentsTitle">Задания дисциплины</h2>
 
             <form id="assignmentForm">
                 <div>
-                    <label for="assignmentTitle">Название</label>
+                    <label for="assignmentTitle">Вид задания</label>
                     <input id="assignmentTitle" type="text" required>
                 </div>
                 <div>
@@ -269,9 +270,9 @@
                     <textarea id="assignmentDescription"></textarea>
                 </div>
                 <div>
-                    <label for="assignmentLesson">Занятие</label>
+                    <label for="assignmentLesson">Тема</label>
                     <select id="assignmentLesson">
-                        <option value="">Общее задание курса</option>
+                        <option value="">Общее задание дисциплины</option>
                     </select>
                 </div>
                 <div>

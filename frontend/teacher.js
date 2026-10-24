@@ -96,6 +96,7 @@ const gradeItemType = document.getElementById("gradeItemType");
 const gradeItemMaxScore = document.getElementById("gradeItemMaxScore");
 const gradeItemsList = document.getElementById("gradeItemsList");
 const assignmentGradeDate = document.getElementById("assignmentGradeDate");
+const teacherSubmissionInbox = document.getElementById("teacherSubmissionInbox");
 
 let selectedSubmissionId = null;
 let selectedSubmissionMaxScore = null;
@@ -490,6 +491,7 @@ returnSubmissionButton.addEventListener("click", async () => {
     message.textContent = data.message;
     submissionDetailsSection.hidden = true;
     await loadSubmissions(selectedSubmissionsAssignmentId,selectedSubmissionsAssignmentTitle);
+    await loadRecentSubmissions();
   } catch (error) {
     console.error("Ошибка возврата работы:", error);
     message.textContent = "Не удалось вернуть работу.";
@@ -526,6 +528,7 @@ gradeSubmissionButton.addEventListener("click", async () => {
     }
     message.textContent = data.message;
     await loadSubmissions(selectedSubmissionsAssignmentId,selectedSubmissionsAssignmentTitle);
+    await loadRecentSubmissions();
   } catch (error) {
     console.error("Ошибка оценивания работы:", error);
     message.textContent = "Не удалось оценить работу.";
@@ -669,7 +672,7 @@ async function loadCourseLessonOptions(courseId, select, emptyLabel) {
 
 async function loadMaterials(courseId, courseName = "") {
   try {
-    await loadCourseLessonOptions(courseId,materialLesson,"Общий материал курса");
+    await loadCourseLessonOptions(courseId,materialLesson,"Общий материал дисциплины");
     const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/materials`,{
       credentials: "include"
     });
@@ -682,7 +685,7 @@ async function loadMaterials(courseId, courseName = "") {
     selectedCourseName = courseName;
     window.TeacherUI?.setCoursePanel("courseMaterialsSection");
     courseMaterialsSection.hidden = false;
-    courseMaterialsTitle.textContent = courseName ? `Материалы курса: ${courseName}` : "Материалы курса";
+    courseMaterialsTitle.textContent = courseName ? `Материалы дисциплины: ${courseName}` : "Материалы дисциплины";
     materialsList.innerHTML = "";
     if (data.length === 0) {
       materialsList.textContent = "Материалы пока не созданы.";
@@ -694,7 +697,14 @@ async function loadMaterials(courseId, courseName = "") {
       const titleElement = document.createElement("strong");
       titleElement.textContent = material.title;
       const infoElement = document.createElement("span");
-      infoElement.textContent = ` — ${material.material_type} — ${material.is_published ? "опубликован" : "черновик"}`;
+      const materialTypeLabels = {
+        lecture: "Лекция",
+        presentation: "Презентация",
+        methodical: "Методический материал",
+        self_study: "Самостоятельная работа",
+        other: "Прочее"
+      };
+      infoElement.textContent = ` — ${materialTypeLabels[material.material_type] || material.material_type} — ${material.is_published ? "опубликован" : "черновик"}`;
       if (material.lesson_topic) infoElement.textContent += ` — ${material.module_title ? `${material.module_title}: ` : ""}${material.lesson_topic}`;
       const filesButton = document.createElement("button");
       filesButton.textContent = "Файлы";
@@ -728,7 +738,7 @@ async function loadCourses() {
     }
     coursesList.innerHTML = "";
     if (data.length === 0) {
-      coursesList.textContent = "Учебные курсы пока не созданы.";
+      coursesList.textContent = "Дисциплины/МДК пока не созданы.";
       return;
     }
     for (const course of data) {
@@ -743,7 +753,7 @@ async function loadCourses() {
 
       const courseName = `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`;
       const openButton = document.createElement("button");
-      openButton.textContent = "Открыть курс";
+      openButton.textContent = "Открыть дисциплину";
       openButton.className = "teacher-open-course";
       openButton.addEventListener("click",async () => {
         if (window.TeacherUI) await window.TeacherUI.openCourse({ id:course.id,name:courseName });
@@ -763,7 +773,7 @@ async function loadCourses() {
 
 async function loadAssignments(courseId, courseName = "") {
   try {
-    await loadCourseLessonOptions(courseId,assignmentLesson,"Общее задание курса");
+    await loadCourseLessonOptions(courseId,assignmentLesson,"Общее задание дисциплины");
     const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/assignments`,{
       credentials: "include"
     });
@@ -776,7 +786,7 @@ async function loadAssignments(courseId, courseName = "") {
     selectedAssignmentCourseName = courseName;
     window.TeacherUI?.setCoursePanel("courseAssignmentsSection");
     courseAssignmentsSection.hidden = false;
-    courseAssignmentsTitle.textContent = `Задания курса: ${courseName}`;
+    courseAssignmentsTitle.textContent = `Задания дисциплины: ${courseName}`;
     assignmentsList.innerHTML = "";
     assignmentFilesSection.hidden = true;
     selectedAssignmentId = null;
@@ -1464,7 +1474,7 @@ async function loadModules(courseId) {
   if (!response.ok) throw new Error(data.error || "Ошибка получения модулей");
 
   modulesList.innerHTML = "";
-  lessonModule.innerHTML = '<option value="">Без модуля</option>';
+  lessonModule.innerHTML = '<option value="">Без раздела</option>';
   data.forEach((module) => {
     const option = document.createElement("option");
     option.value = module.id;
@@ -1476,7 +1486,7 @@ async function loadModules(courseId) {
     const title = document.createElement("strong");
     title.textContent = module.title;
     const info = document.createElement("span");
-    info.textContent = ` — занятий: ${module.lessons_count}`;
+    info.textContent = ` — тем: ${module.lessons_count}`;
     if (module.description) info.textContent += ` — ${module.description}`;
     row.append(title,info);
     if (module.lessons_count === 0) {
@@ -1484,7 +1494,7 @@ async function loadModules(courseId) {
       deleteButton.type = "button";
       deleteButton.textContent = "Удалить";
       deleteButton.addEventListener("click",async () => {
-        if (!confirm(`Удалить модуль «${module.title}»?`)) return;
+        if (!confirm(`Удалить раздел «${module.title}»?`)) return;
         const deleteResponse = await fetch(`${apiUrl}/api/teacher/modules/${module.id}`,{
           method:"DELETE",
           credentials:"include"
@@ -1497,7 +1507,7 @@ async function loadModules(courseId) {
     }
     modulesList.appendChild(row);
   });
-  if (data.length === 0) modulesList.textContent = "Модули пока не созданы.";
+  if (data.length === 0) modulesList.textContent = "Разделы пока не созданы.";
   return data;
 }
 
@@ -1521,16 +1531,16 @@ async function loadLessons(courseId, courseName = "") {
     window.TeacherUI?.setCoursePanel("courseLessonsSection");
     courseLessonsSection.hidden = false;
 
-    courseLessonsTitle.textContent = `Занятия курса: ${courseName}`;
+    courseLessonsTitle.textContent = `Темы дисциплины: ${courseName}`;
     lessonsList.innerHTML = "";
     window.EduUI?.setCalendarEvents(`teacher-lessons-${courseId}`, data.map((lesson) => ({
       date: lesson.lesson_date,
-      title: `${lesson.topic || "Занятие"} · ${courseName}`,
+      title: `${lesson.topic || "Тема"} · ${courseName}`,
       type: "lesson"
     })));
 
     if (data.length === 0) {
-      lessonsList.textContent = "Занятия пока не созданы.";
+      lessonsList.textContent = "Темы пока не созданы.";
       return;
     }
 
@@ -1625,7 +1635,7 @@ async function loadLessons(courseId, courseName = "") {
       topicInput.maxLength = 255;
 
       const moduleLabel = document.createElement("label");
-      moduleLabel.textContent = "Модуль";
+      moduleLabel.textContent = "Раздел";
       const moduleSelect = lessonModule.cloneNode(true);
       moduleSelect.id = "";
       moduleSelect.value = lesson.module_id || "";
@@ -2384,8 +2394,80 @@ async function rejectStudent(studentId) {
   await loadPendingStudents();
 }
 
+function formatSubmissionDate(value) {
+  if (!value) return "Дата отправки не указана";
+  return new Date(value).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+async function loadRecentSubmissions() {
+  if (!teacherSubmissionInbox) return;
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/submissions/recent`, { credentials: "include" });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Ошибка получения присланных работ.");
+
+    teacherSubmissionInbox.innerHTML = "";
+    if (data.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "teacher-inbox-empty";
+      empty.textContent = "Новых работ на проверку пока нет.";
+      teacherSubmissionInbox.appendChild(empty);
+      window.EduUI?.setRailNotifications([]);
+      return;
+    }
+
+    data.forEach((submission) => {
+      const row = document.createElement("article");
+      row.className = "teacher-inbox-row";
+
+      const content = document.createElement("div");
+      const studentName = [submission.last_name,submission.first_name,submission.middle_name].filter(Boolean).join(" ");
+      const title = document.createElement("strong");
+      title.textContent = submission.assignment_title;
+      const student = document.createElement("span");
+      student.textContent = `${studentName}${submission.student_number ? ` · ${submission.student_number}` : ""}`;
+      const location = document.createElement("small");
+      location.textContent = [submission.discipline_name,submission.group_name,submission.lesson_topic].filter(Boolean).join(" · ");
+      content.append(title,student,location);
+
+      const meta = document.createElement("div");
+      const date = document.createElement("time");
+      date.dateTime = submission.submitted_at || "";
+      date.textContent = formatSubmissionDate(submission.submitted_at);
+      const status = document.createElement("span");
+      status.className = submission.is_late ? "teacher-inbox-status is-late" : "teacher-inbox-status";
+      status.textContent = submission.is_late ? "На проверке · после срока" : "На проверке";
+      meta.append(date,status);
+
+      const openButton = document.createElement("button");
+      openButton.type = "button";
+      openButton.textContent = "Проверить";
+      openButton.addEventListener("click", () => openSubmission(submission));
+
+      row.append(content,meta,openButton);
+      teacherSubmissionInbox.appendChild(row);
+    });
+
+    window.EduUI?.setRailNotifications(data.slice(0,5).map((submission) => ({
+      text: `Работа: ${submission.assignment_title} · ${submission.group_name}`,
+      time: formatSubmissionDate(submission.submitted_at)
+    })));
+  } catch (error) {
+    console.error("Ошибка загрузки присланных работ:", error);
+    teacherSubmissionInbox.innerHTML = '<p class="teacher-inbox-empty">Не удалось загрузить присланные работы.</p>';
+  }
+}
+
 async function openSubmission(submission) {
   selectedSubmissionId = submission.id;
+  selectedSubmissionsAssignmentId = submission.assignment_id;
+  selectedSubmissionsAssignmentTitle = submission.assignment_title || selectedSubmissionsAssignmentTitle;
   const fullName = [
     submission.last_name,
     submission.first_name,
@@ -2491,6 +2573,7 @@ function getJournalCellText(submission, assignment) {
 async function init() {
   const accessAllowed = await checkTeacherAccess();
   if (!accessAllowed) return;
+  await loadRecentSubmissions();
   await loadPendingStudents();
   await loadGroups();
   await loadDisciplines();

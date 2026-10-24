@@ -333,6 +333,7 @@ CREATE TABLE materials (
                 'lecture',
                 'presentation',
                 'methodical',
+                'self_study',
                 'other'
             )
         )

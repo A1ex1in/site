@@ -21,7 +21,7 @@ router.post("/courses/:id/materials",requireAuth,requireTeacher,async (request, 
     if (!normalizedTitle) {
       return response.status(400).json({ error: "Необходимо указать название материала" });
     }
-    const allowedTypes = ["lecture", "presentation", "methodical", "other"];
+    const allowedTypes = ["lecture", "presentation", "methodical", "self_study", "other"];
     const normalizedType = typeof materialType === "string" ? materialType.trim() : "other";
     if (!allowedTypes.includes(normalizedType)) {
       return response.status(400).json({ error: "Недопустимый тип учебного материала" });
@@ -1280,6 +1280,59 @@ router.delete("/assignments/:assignmentId/material-files/:materialFileId",requir
   } catch (error) {
     console.error("Ошибка удаления связи файла материала:", error);
     response.status(500).json({ error: "Ошибка удаления файла из задания" });
+  }
+});
+
+// Получить последние работы, ожидающие проверки преподавателя
+router.get("/submissions/recent",requireAuth,requireTeacher,async (request, response) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        ss.id,
+        ss.assignment_id,
+        ss.student_id,
+        ss.status,
+        ss.student_comment,
+        ss.submitted_at,
+        ss.teacher_comment,
+        ss.checked_at,
+        u.last_name,
+        u.first_name,
+        u.middle_name,
+        sp.student_number,
+        a.title AS assignment_title,
+        a.max_score,
+        a.deadline,
+        c.id AS course_id,
+        c.academic_year,
+        c.semester,
+        d.name AS discipline_name,
+        sg.name AS group_name,
+        l.topic AS lesson_topic,
+        CASE
+          WHEN a.deadline IS NOT NULL
+            AND ss.submitted_at IS NOT NULL
+            AND ss.submitted_at > a.deadline
+          THEN TRUE
+          ELSE FALSE
+        END AS is_late
+      FROM student_submissions ss
+      JOIN assignments a ON a.id = ss.assignment_id
+      JOIN courses c ON c.id = a.course_id
+      JOIN disciplines d ON d.id = c.discipline_id
+      JOIN student_groups sg ON sg.id = c.group_id
+      JOIN users u ON u.id = ss.student_id
+      JOIN student_profiles sp ON sp.user_id = ss.student_id
+      LEFT JOIN lessons l ON l.id = a.lesson_id
+      WHERE c.teacher_id = $1
+        AND ss.status = 'submitted'
+      ORDER BY ss.submitted_at DESC NULLS LAST, ss.id DESC
+      LIMIT 30
+    `,[request.user.id]);
+    response.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка получения последних работ студентов:", error);
+    response.status(500).json({ error: "Ошибка получения последних работ студентов" });
   }
 });
 

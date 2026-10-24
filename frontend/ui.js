@@ -180,6 +180,32 @@
     while (list.children.length > 3) list.lastElementChild.remove();
   }
 
+  function setRailNotifications(notices = []) {
+    const list = document.getElementById("railNotifications");
+    if (!list) return;
+    list.innerHTML = "";
+    if (!notices.length) {
+      const empty = document.createElement("p");
+      empty.className = "rail-empty";
+      empty.textContent = "Новых уведомлений нет.";
+      list.appendChild(empty);
+      return;
+    }
+    notices.slice(0,5).forEach((notice) => {
+      const item = document.createElement("div");
+      item.className = "rail-notice";
+      const dot = document.createElement("span");
+      dot.className = "rail-event-dot";
+      const content = document.createElement("span");
+      content.textContent = typeof notice === "string" ? notice : notice.text;
+      const time = document.createElement("small");
+      time.textContent = typeof notice === "string" ? "" : notice.time || "";
+      if (time.textContent) content.appendChild(time);
+      item.append(dot,content);
+      list.appendChild(item);
+    });
+  }
+
   function initNotifications() {
     const message = document.getElementById("message");
     if (!message) return;
@@ -215,12 +241,12 @@
         <header class="workspace-header"><button class="menu-toggle" type="button" aria-label="Открыть меню">${icons.menu}</button><div class="workspace-title"><h1 id="welcomeTitle">Добро пожаловать!</h1><p>${role === "admin" ? "Управляйте пользователями и следите за показателями платформы." : role === "teacher" ? "Управляйте курсами, заданиями и учебной активностью студентов." : "Ваши курсы, задания и результаты собраны в одном месте."}</p></div></header>
         <div class="dashboard-layout">
           <div class="dashboard-main">
-            <section class="overview-panel" id="dashboardOverview"><div class="stat-grid">
+            ${role === "teacher" ? "" : `<section class="overview-panel" id="dashboardOverview"><div class="stat-grid">
               <article class="stat-card"><span class="stat-icon">${icons.book}</span><span><strong class="stat-value" id="statCourses">—</strong><span class="stat-label">${role === "admin" ? "Пользователей" : role === "teacher" ? "Учебных курсов" : "Моих курсов"}</span></span></article>
               <article class="stat-card"><span class="stat-icon">${icons.users}</span><span><strong class="stat-value" id="statPeople">—</strong><span class="stat-label">${role === "admin" ? "Преподавателей" : role === "teacher" ? "Заявок студентов" : "Учебная группа"}</span></span></article>
               <article class="stat-card"><span class="stat-icon">${icons.task}</span><span><strong class="stat-value" id="statTasks">—</strong><span class="stat-label">${role === "admin" ? "Посещаемость" : "Активных заданий"}</span></span></article>
               <article class="stat-card"><span class="stat-icon">${icons.chart}</span><span><strong class="stat-value" id="statSystem">${role === "admin" ? "—" : "100%"}</strong><span class="stat-label">${role === "admin" ? "Учебных курсов" : "Система доступна"}</span></span></article>
-            </div></section>
+            </div></section>`}
             <div class="content-stack"></div>
           </div>
           <aside class="dashboard-rail" aria-label="Календарь и уведомления">
@@ -231,7 +257,7 @@
             </section>
             <section class="rail-card"><h2 class="rail-card-title" id="eventsTitle">События</h2><div class="rail-list" id="calendarEvents"><p class="rail-empty">На выбранную дату событий нет.</p></div></section>
             <section class="rail-card"><h2 class="rail-card-title">Уведомления</h2><div class="rail-list" id="railNotifications"><p class="rail-empty">Новых уведомлений нет.</p></div></section>
-            <section class="rail-card"><h2 class="rail-card-title">Быстрые действия</h2><div class="quick-actions">${role === "admin" ? '<button class="quick-action" data-quick-target="#adminGroupForm">Создать группу</button><button class="quick-action" data-quick-target="#userForm">Добавить пользователя</button><button class="quick-action" data-quick-target="#teacherLoadSection">Нагрузка</button><button class="quick-action" data-quick-target="#attendanceSection">Посещаемость</button>' : role === "teacher" ? '<button class="quick-action" data-quick-target="#teacherCoursesView">Открыть курсы</button><button class="quick-action" data-quick-target="#courseForm">Создать курс</button><button class="quick-action" data-quick-target="#teacherStudentsView">Студенты</button><button class="quick-action" data-quick-target="#groupForm">Создать группу</button>' : '<button class="quick-action" data-quick-target="#coursesList">Мои курсы</button><button class="quick-action" data-quick-target="#courseAssignmentsSection">Задания</button><button class="quick-action" data-quick-target="#courseMaterialsSection">Материалы</button><button class="quick-action" data-quick-target="#profile">Профиль</button>'}</div></section>
+            <section class="rail-card"><h2 class="rail-card-title">Быстрые действия</h2><div class="quick-actions">${role === "admin" ? '<button class="quick-action" data-quick-target="#adminGroupForm">Создать группу</button><button class="quick-action" data-quick-target="#userForm">Добавить пользователя</button><button class="quick-action" data-quick-target="#teacherLoadSection">Нагрузка</button><button class="quick-action" data-quick-target="#attendanceSection">Посещаемость</button>' : role === "teacher" ? '<button class="quick-action" data-quick-target="#teacherCoursesView">Открыть дисциплины</button><button class="quick-action" data-quick-target="#courseForm">Новая группа</button><button class="quick-action" data-quick-target="#teacherStudentsView">Студенты</button><button class="quick-action" data-quick-target="#groupForm">Учебная группа</button>' : '<button class="quick-action" data-quick-target="#coursesList">Мои курсы</button><button class="quick-action" data-quick-target="#courseAssignmentsSection">Задания</button><button class="quick-action" data-quick-target="#courseMaterialsSection">Материалы</button><button class="quick-action" data-quick-target="#profile">Профиль</button>'}</div></section>
           </aside>
         </div>
       </main>`;
@@ -283,9 +309,12 @@
         if (!element || /Загрузка|пока|Нет /.test(element.textContent)) return 0;
         return element.children.length;
       };
-      document.getElementById("statCourses").textContent = String(count("#coursesList"));
-      document.getElementById("statPeople").textContent = role === "teacher" ? String(count("#studentsList")) : "Моя";
-      document.getElementById("statTasks").textContent = String(count("#assignmentsList"));
+      const statCourses = document.getElementById("statCourses");
+      const statPeople = document.getElementById("statPeople");
+      const statTasks = document.getElementById("statTasks");
+      if (statCourses) statCourses.textContent = String(count("#coursesList"));
+      if (statPeople) statPeople.textContent = role === "teacher" ? String(count("#studentsList")) : "Моя";
+      if (statTasks) statTasks.textContent = String(count("#assignmentsList"));
     };
     ["coursesList","studentsList","assignmentsList"].forEach((id) => {
       const element = document.getElementById(id);
@@ -307,7 +336,7 @@
     if (welcome) welcome.textContent = `Добро пожаловать, ${first || "пользователь"}!`;
   }
 
-  window.EduUI = { setUser, setCalendarEvents, createActionGroup };
+  window.EduUI = { setUser, setCalendarEvents, createActionGroup, setRailNotifications };
   renderIcons(document);
   initPasswordToggles();
   if (document.body.classList.contains("dashboard-page")) initDashboard();

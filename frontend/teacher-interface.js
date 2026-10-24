@@ -36,36 +36,41 @@
 
   const homeView = element("section","teacher-view");
   homeView.id = "teacherHomeView";
-  homeView.appendChild(sectionHeading("Рабочий процесс","С чего начать","Три шага от пустого курса до готового задания для студентов."));
+  homeView.appendChild(sectionHeading("Проверка работ","Присланные задания","Работы студентов, которые ожидают вашей проверки."));
+  const submissionInbox = element("section","teacher-submission-inbox");
+  submissionInbox.id = "teacherSubmissionInbox";
+  submissionInbox.innerHTML = '<p class="teacher-inbox-empty">Загрузка присланных работ…</p>';
+  homeView.appendChild(submissionInbox);
+  homeView.appendChild(sectionHeading("Рабочий процесс","С чего начать","Три шага от пустой дисциплины до готового задания для студентов."));
   const steps = element("div","teacher-steps");
   steps.innerHTML = `
-    <article><b>1</b><div><strong>Выберите курс</strong><p>Откройте «Курсы» и нажмите на нужную карточку.</p></div></article>
-    <article><b>2</b><div><strong>Соберите структуру</strong><p>Создайте модули и занятия в нужном порядке.</p></div></article>
+    <article><b>1</b><div><strong>Выберите дисциплину</strong><p>Откройте «Дисциплина/МДК» и выберите нужную карточку.</p></div></article>
+    <article><b>2</b><div><strong>Соберите структуру</strong><p>Создайте разделы и темы в нужном порядке.</p></div></article>
     <article><b>3</b><div><strong>Добавьте содержимое</strong><p>Привяжите материалы и задания, затем опубликуйте их.</p></div></article>`;
   homeView.appendChild(steps);
   const homeActions = element("div","teacher-home-actions");
-  homeActions.innerHTML = '<button type="button" data-open-teacher-view="#teacherCoursesView">Перейти к курсам</button><button type="button" data-open-teacher-view="#teacherStudentsView">Открыть студентов</button>';
+  homeActions.innerHTML = '<button type="button" data-open-teacher-view="#teacherCoursesView">Перейти к дисциплинам</button><button type="button" data-open-teacher-view="#teacherStudentsView">Открыть студентов</button>';
   homeView.appendChild(homeActions);
 
   const coursesView = element("section","teacher-view");
   coursesView.id = "teacherCoursesView";
   coursesView.hidden = true;
-  coursesView.appendChild(sectionHeading("Обучение","Учебные курсы","Выберите курс — после этого появятся четыре последовательных раздела работы."));
+  coursesView.appendChild(sectionHeading("Обучение","Дисциплина/МДК","Выберите дисциплину — после этого появятся четыре последовательных раздела работы."));
   const creationGrid = element("div","teacher-create-grid");
   creationGrid.appendChild(createPanel("Новая дисциплина","Название и короткий код предмета",[byId("disciplineForm"),byId("disciplinesList")]));
-  creationGrid.appendChild(createPanel("Новый курс","Дисциплина, группа, учебный год и семестр",[byId("courseForm")]));
+  creationGrid.appendChild(createPanel("Новая группа","Дисциплина, учебная группа, учебный год и семестр",[byId("courseForm")]));
   coursesView.appendChild(creationGrid);
-  coursesView.appendChild(blockHeading("Ваши курсы","Выберите курс для работы","Все действия с содержимым откроются внутри выбранного курса."));
+  coursesView.appendChild(blockHeading("Ваши дисциплины","Выберите дисциплину для работы","Все действия с содержимым откроются внутри выбранной дисциплины."));
   coursesView.appendChild(byId("coursesList"));
 
   const workspace = element("section","teacher-course-workspace");
   workspace.id = "teacherCourseWorkspace";
   workspace.hidden = true;
   const workspaceHeader = element("header","teacher-course-header");
-  workspaceHeader.innerHTML = '<button id="closeCourseWorkspaceButton" type="button">← Все курсы</button><span>Выбранный курс</span><h2 id="teacherCourseWorkspaceTitle">Курс</h2><p>Работайте по порядку: структура → материалы → задания → журнал.</p>';
+  workspaceHeader.innerHTML = '<button id="closeCourseWorkspaceButton" type="button">← Все дисциплины/МДК</button><span>Выбранная дисциплина</span><h2 id="teacherCourseWorkspaceTitle">Дисциплина</h2><p>Работайте по порядку: структура → материалы → задания → журнал.</p>';
   workspace.appendChild(workspaceHeader);
   const tabs = element("nav","teacher-course-tabs");
-  tabs.setAttribute("aria-label","Разделы курса");
+  tabs.setAttribute("aria-label","Разделы дисциплины");
   tabs.innerHTML = '<button type="button" data-course-panel="courseLessonsSection">1. Структура</button><button type="button" data-course-panel="courseMaterialsSection">2. Материалы</button><button type="button" data-course-panel="courseAssignmentsSection">3. Задания</button><button type="button" data-course-panel="journalSection">4. Журнал</button>';
   workspace.appendChild(tabs);
 
@@ -97,9 +102,9 @@
     }
   }
 
-  collapseCourseForm("courseLessonsSection","moduleForm","modulesList","Добавить модуль","Крупный раздел курса","Модули курса");
-  collapseCourseForm("courseLessonsSection","lessonForm","lessonsList","Добавить занятие","Лекция, практика или лабораторная","Занятия курса");
-  collapseCourseForm("courseMaterialsSection","materialForm","materialsList","Добавить материал","Конспект, презентация или методичка");
+  collapseCourseForm("courseLessonsSection","moduleForm","modulesList","Добавить раздел","Крупный раздел дисциплины","Модули дисциплины");
+  collapseCourseForm("courseLessonsSection","lessonForm","lessonsList","Добавить тему","Лекция, практика или лабораторная","Темы дисциплины");
+  collapseCourseForm("courseMaterialsSection","materialForm","materialsList","Добавить вид материала","Конспект, презентация, методичка или самостоятельная работа");
   collapseCourseForm("courseAssignmentsSection","assignmentForm","assignmentsList","Добавить задание","Практика или проверочная работа");
   collapseCourseForm("gradeItemsSection","gradeItemForm","gradeItemsList","Добавить оценивание","Ответ, работа или тест");
   coursesView.appendChild(workspace);
