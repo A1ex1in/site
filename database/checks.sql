@@ -210,6 +210,72 @@ WITH checks AS (
 
               AND c.semester = 1
         )
+
+
+    UNION ALL
+
+
+    SELECT
+        8,
+        'У курса созданы учебные модули',
+        (
+            SELECT COUNT(*) >= 3
+            FROM course_modules module
+            JOIN courses course ON course.id = module.course_id
+            JOIN disciplines discipline ON discipline.id = course.discipline_id
+            WHERE discipline.code = 'МПС'
+        )
+
+
+    UNION ALL
+
+
+    SELECT
+        9,
+        'Занятия распределены по модулям',
+        (
+            SELECT COUNT(*) >= 5 AND BOOL_AND(lesson.module_id IS NOT NULL)
+            FROM lessons lesson
+            JOIN courses course ON course.id = lesson.course_id
+            JOIN disciplines discipline ON discipline.id = course.discipline_id
+            WHERE discipline.code = 'МПС'
+        )
+
+
+    UNION ALL
+
+
+    SELECT
+        10,
+        'Опубликованные материалы привязаны к занятиям',
+        (
+            SELECT COUNT(*) >= 5
+               AND BOOL_AND(material.lesson_id IS NOT NULL)
+               AND BOOL_AND(material.is_published)
+            FROM materials material
+            JOIN courses course ON course.id = material.course_id
+            JOIN disciplines discipline ON discipline.id = course.discipline_id
+            WHERE discipline.code = 'МПС'
+        )
+
+
+    UNION ALL
+
+
+    SELECT
+        11,
+        'Опубликованные задания привязаны к занятиям и журналу',
+        (
+            SELECT COUNT(*) >= 3
+               AND BOOL_AND(assignment.lesson_id IS NOT NULL)
+               AND BOOL_AND(assignment.is_published)
+               AND BOOL_AND(grade_item.id IS NOT NULL)
+            FROM assignments assignment
+            JOIN courses course ON course.id = assignment.course_id
+            JOIN disciplines discipline ON discipline.id = course.discipline_id
+            LEFT JOIN grade_items grade_item ON grade_item.assignment_id = assignment.id
+            WHERE discipline.code = 'МПС'
+        )
 ),
 
 

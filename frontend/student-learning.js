@@ -76,6 +76,10 @@ function pushView(view, details = {}) {
   window.history.pushState({ eduView:view, ...details },"",window.location.pathname);
 }
 
+function replaceView(view, details = {}) {
+  window.history.replaceState({ eduView:view, ...details },"",window.location.pathname);
+}
+
 function courseTitle() {
   return state.path?.course?.discipline_name || "Учебный курс";
 }
@@ -281,21 +285,18 @@ function itemNavigation(item) {
 }
 
 function bindItemNavigation() {
-  bindBack("itemModuleButton",() => {
-    pushView("module",{ moduleIndex:state.moduleIndex });
-    renderModule();
-  });
+  bindBack("itemModuleButton",() => window.history.back());
   document.getElementById("previousItemButton")?.addEventListener("click",() => {
     if (state.itemIndex > 0) {
       state.itemIndex -= 1;
-      pushView("item",{ moduleIndex:state.moduleIndex, itemIndex:state.itemIndex });
+      replaceView("item",{ moduleIndex:state.moduleIndex, itemIndex:state.itemIndex });
       openCurrentItem();
     }
   });
   document.getElementById("nextItemButton")?.addEventListener("click",() => {
     if (state.itemIndex < moduleItems().length - 1) {
       state.itemIndex += 1;
-      pushView("item",{ moduleIndex:state.moduleIndex, itemIndex:state.itemIndex });
+      replaceView("item",{ moduleIndex:state.moduleIndex, itemIndex:state.itemIndex });
       openCurrentItem();
     }
   });
@@ -350,11 +351,7 @@ function renderAssignmentIntro(item) {
       } else {
         updateAssignmentStatus(item.id,current.submission.status);
       }
-      window.history.replaceState({
-        eduView:"assignment",
-        moduleIndex:state.moduleIndex,
-        itemIndex:state.itemIndex
-      },"",window.location.pathname);
+      replaceView("assignment",{ moduleIndex:state.moduleIndex, itemIndex:state.itemIndex });
       renderAssignment({ ...item, submission_status:current.submission?.status || "draft" });
     } catch (error) {
       showMessage(error.message);
