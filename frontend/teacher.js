@@ -30,6 +30,7 @@ const courseMaterialsTitle = document.getElementById("courseMaterialsTitle");
 const materialForm = document.getElementById("materialForm");
 const materialTitle = document.getElementById("materialTitle");
 const materialType = document.getElementById("materialType");
+const materialLesson = document.getElementById("materialLesson");
 const materialDescription = document.getElementById("materialDescription");
 const materialsList = document.getElementById("materialsList");
 const materialFilesSection = document.getElementById("materialFilesSection");
@@ -42,6 +43,7 @@ const courseAssignmentsTitle = document.getElementById("courseAssignmentsTitle")
 const assignmentForm = document.getElementById("assignmentForm");
 const assignmentTitle = document.getElementById("assignmentTitle");
 const assignmentDescription = document.getElementById("assignmentDescription");
+const assignmentLesson = document.getElementById("assignmentLesson");
 const assignmentDeadline = document.getElementById("assignmentDeadline");
 const assignmentMaxScore = document.getElementById("assignmentMaxScore");
 const assignmentsList = document.getElementById("assignmentsList");
@@ -73,6 +75,11 @@ const journalContainer = document.getElementById("journalContainer");
 const courseLessonsSection = document.getElementById("courseLessonsSection");
 const courseLessonsTitle = document.getElementById("courseLessonsTitle");
 const lessonForm = document.getElementById("lessonForm");
+const moduleForm = document.getElementById("moduleForm");
+const moduleTitle = document.getElementById("moduleTitle");
+const moduleDescription = document.getElementById("moduleDescription");
+const modulesList = document.getElementById("modulesList");
+const lessonModule = document.getElementById("lessonModule");
 const lessonDate = document.getElementById("lessonDate");
 const lessonType = document.getElementById("lessonType");
 const lessonTopic = document.getElementById("lessonTopic");
@@ -133,7 +140,8 @@ materialForm.addEventListener("submit",async (event) => {
       body: JSON.stringify({
         title,
         description,
-        materialType: materialType.value
+        materialType: materialType.value,
+        lessonId: materialLesson.value || null
       })
     });
     const data = await response.json();
@@ -404,7 +412,8 @@ assignmentForm.addEventListener("submit", async (event) => {
         description: assignmentDescription.value,
         gradeDate: assignmentGradeDate.value,
         deadline,
-        maxScore: assignmentMaxScore.value
+        maxScore: assignmentMaxScore.value,
+        lessonId: assignmentLesson.value || null
       })
     });
     const data = await response.json();
@@ -539,6 +548,7 @@ lessonForm.addEventListener("submit",async (event) => {
       },
       credentials: "include",
       body: JSON.stringify({
+        moduleId: lessonModule.value || null,
         lessonDate: lessonDate.value,
         lessonType: lessonType.value,
         topic: lessonTopic.value
@@ -560,6 +570,36 @@ lessonForm.addEventListener("submit",async (event) => {
   } catch (error) {
     console.error("Ошибка создания занятия:", error);
     message.textContent = "Не удалось создать занятие.";
+  }
+});
+
+moduleForm.addEventListener("submit",async (event) => {
+  event.preventDefault();
+  if (!selectedLessonsCourseId) {
+    message.textContent = "Сначала выберите учебный курс.";
+    return;
+  }
+  try {
+    const response = await fetch(`${apiUrl}/api/teacher/courses/${selectedLessonsCourseId}/modules`,{
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        title: moduleTitle.value,
+        description: moduleDescription.value
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      message.textContent = data.error || "Ошибка создания модуля.";
+      return;
+    }
+    moduleForm.reset();
+    message.textContent = data.message;
+    await loadModules(selectedLessonsCourseId);
+  } catch (error) {
+    console.error("Ошибка создания модуля:", error);
+    message.textContent = "Не удалось создать модуль.";
   }
 });
 
@@ -604,8 +644,32 @@ gradeItemForm.addEventListener("submit",async (event) => {
   }
 });
 
+function fillLessonSelect(select, lessons, emptyLabel) {
+  select.innerHTML = "";
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = emptyLabel;
+  select.appendChild(emptyOption);
+  lessons.forEach((lesson) => {
+    const option = document.createElement("option");
+    option.value = lesson.id;
+    const modulePrefix = lesson.module_title ? `${lesson.module_title} · ` : "";
+    option.textContent = `${modulePrefix}${lesson.topic || "Без темы"} · ${lesson.lesson_date.split("-").reverse().join(".")}`;
+    select.appendChild(option);
+  });
+}
+
+async function loadCourseLessonOptions(courseId, select, emptyLabel) {
+  const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/lessons`,{ credentials:"include" });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Ошибка получения занятий");
+  fillLessonSelect(select,data,emptyLabel);
+  return data;
+}
+
 async function loadMaterials(courseId, courseName = "") {
   try {
+    await loadCourseLessonOptions(courseId,materialLesson,"Общий материал курса");
     const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/materials`,{
       credentials: "include"
     });
@@ -631,6 +695,7 @@ async function loadMaterials(courseId, courseName = "") {
       titleElement.textContent = material.title;
       const infoElement = document.createElement("span");
       infoElement.textContent = ` — ${material.material_type} — ${material.is_published ? "опубликован" : "черновик"}`;
+      if (material.lesson_topic) infoElement.textContent += ` — ${material.module_title ? `${material.module_title}: ` : ""}${material.lesson_topic}`;
       const filesButton = document.createElement("button");
       filesButton.textContent = "Файлы";
       filesButton.addEventListener("click",async () => { await loadMaterialFiles(material.id, material.title); });
@@ -705,6 +770,7 @@ async function loadCourses() {
 
 async function loadAssignments(courseId, courseName = "") {
   try {
+    await loadCourseLessonOptions(courseId,assignmentLesson,"Общее задание курса");
     const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/assignments`,{
       credentials: "include"
     });
@@ -739,6 +805,7 @@ async function loadAssignments(courseId, courseName = "") {
 
       const statusElement = document.createElement("span");
       statusElement.textContent = assignment.is_published ? " — опубликовано" : " — черновик";
+      if (assignment.lesson_topic) statusElement.textContent += ` — ${assignment.module_title ? `${assignment.module_title}: ` : ""}${assignment.lesson_topic}`;
 
       const scoreElement = document.createElement("span");
       scoreElement.textContent = ` — максимум: ${assignment.max_score}`;
@@ -1403,8 +1470,52 @@ async function loadJournal(courseId, courseName = "") {
   }
 }
 
+async function loadModules(courseId) {
+  const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/modules`,{ credentials:"include" });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Ошибка получения модулей");
+
+  modulesList.innerHTML = "";
+  lessonModule.innerHTML = '<option value="">Без модуля</option>';
+  data.forEach((module) => {
+    const option = document.createElement("option");
+    option.value = module.id;
+    option.textContent = module.title;
+    lessonModule.appendChild(option);
+
+    const row = document.createElement("div");
+    row.className = "entity-row";
+    const title = document.createElement("strong");
+    title.textContent = module.title;
+    const info = document.createElement("span");
+    info.textContent = ` — занятий: ${module.lessons_count}`;
+    if (module.description) info.textContent += ` — ${module.description}`;
+    row.append(title,info);
+    if (module.lessons_count === 0) {
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.textContent = "Удалить";
+      deleteButton.addEventListener("click",async () => {
+        if (!confirm(`Удалить модуль «${module.title}»?`)) return;
+        const deleteResponse = await fetch(`${apiUrl}/api/teacher/modules/${module.id}`,{
+          method:"DELETE",
+          credentials:"include"
+        });
+        const result = await deleteResponse.json();
+        message.textContent = deleteResponse.ok ? result.message : result.error || "Ошибка удаления модуля.";
+        if (deleteResponse.ok) await loadModules(courseId);
+      });
+      row.appendChild(window.EduUI.createActionGroup(deleteButton));
+    }
+    modulesList.appendChild(row);
+  });
+  if (data.length === 0) modulesList.textContent = "Модули пока не созданы.";
+  return data;
+}
+
 async function loadLessons(courseId, courseName = "") {
   try {
+    await loadModules(courseId);
     const response = await fetch(`${apiUrl}/api/teacher/courses/${courseId}/lessons`,{
       credentials: "include"
     });
@@ -1456,7 +1567,7 @@ async function loadLessons(courseId, courseName = "") {
       typeElement.textContent = ` — ${lessonTypeLabels[lesson.lesson_type] || lesson.lesson_type}`;
 
       const topicElement = document.createElement("span");
-      topicElement.textContent = ` — ${lesson.topic || "Тема не указана"}`;
+      topicElement.textContent = ` — ${lesson.module_title ? `${lesson.module_title} · ` : ""}${lesson.topic || "Тема не указана"}`;
 
       // Кнопка оцениваний
       const gradeItemsButton = document.createElement("button");
@@ -1527,6 +1638,13 @@ async function loadLessons(courseId, courseName = "") {
       topicInput.value = lesson.topic || "";
       topicInput.maxLength = 255;
 
+      const moduleLabel = document.createElement("label");
+      moduleLabel.textContent = "Модуль";
+      const moduleSelect = lessonModule.cloneNode(true);
+      moduleSelect.id = "";
+      moduleSelect.value = lesson.module_id || "";
+      moduleLabel.appendChild(moduleSelect);
+
       const saveButton = document.createElement("button");
       saveButton.type = "submit";
       saveButton.textContent = "Сохранить";
@@ -1542,6 +1660,7 @@ async function loadLessons(courseId, courseName = "") {
       editForm.appendChild(dateLabel);
       editForm.appendChild(typeLabel);
       editForm.appendChild(topicLabel);
+      editForm.appendChild(moduleLabel);
       editForm.appendChild(saveButton);
       editForm.appendChild(cancelButton);
 
@@ -1571,7 +1690,8 @@ async function loadLessons(courseId, courseName = "") {
             body: JSON.stringify({
               lessonDate: dateInput.value,
               lessonType: typeSelect.value,
-              topic: topicInput.value.trim()
+              topic: topicInput.value.trim(),
+              moduleId: moduleSelect.value || null
             })
           });
 

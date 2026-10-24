@@ -1,81 +1,29 @@
 <!DOCTYPE html>
 <html lang="ru">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Кабинет студента</title>
+    <title>Моё обучение — EduPlatform</title>
     <link rel="stylesheet" href="style.css">
 </head>
-
-<body class="dashboard-page" data-role="student">
-    <h1>Кабинет студента</h1>
-        <button id="logoutButton">Выйти</button>
-    <h2>Профиль</h2>
-        <div id="profile">
-            Загрузка...
-        </div>
-        <p id="message"></p>
-        <h2>Учебные курсы</h2>
-        <div id="coursesList">
-            Загрузка...
-        </div>
-
-        <section id="courseMaterialsSection" hidden>
-            <h2 id="courseMaterialsTitle">Материалы курса</h2>
-            <div id="materialsList">
-            </div>
-        </section>
-
-        <section id="materialFilesSection" hidden>
-            <h3 id="materialFilesTitle">Файлы материала</h3>
-            <div id="materialFilesList">
-            </div>
-        </section>
-
-        <section id="courseAssignmentsSection" hidden>
-            <h2 id="courseAssignmentsTitle">Задания курса</h2>
-            <div id="assignmentsList">
-            </div>
-        </section>
-
-        <section id="assignmentFilesSection" hidden>
-            <h3 id="assignmentFilesTitle">Файлы задания</h3>
-            <div id="assignmentFilesList">
-            </div>
-        </section>
-
-        <section id="submissionSection" hidden>
-            <h3 id="submissionTitle">Моя работа</h3>
-            <p id="submissionStatus"></p>
-            <p id="submissionSubmittedAt"></p>
-
-            <form id="submissionForm">
-                <div>
-                    <label for="submissionComment">Комментарий к работе</label>
-                    <textarea id="submissionComment"></textarea>
-                </div>
-
-                <button id="saveSubmissionButton" type="submit">Сохранить черновик</button>
-            </form>
-
-            <div id="submissionFeedback" hidden>
-                <p id="submissionScore"></p>
-                <p id="submissionTeacherComment"></p>
-                <p id="submissionCheckedAt"></p>
-            </div>
-            <h4>Файлы работы</h4>
-
-            <form id="submissionFileForm">
-                <input id="submissionFileInput" type="file" required>
-                <button id="uploadSubmissionFileButton" type="submit">Загрузить файл</button>
-            </form>
-
-            <div id="submissionFilesList">
-            </div>
-            <button id="submitSubmissionButton" type="button">Отправить преподавателю</button>
-        </section>
-    <script src="ui.js"></script>
-    <script src="student.js"></script>
+<body class="student-learning">
+    <header class="learning-topbar">
+        <a class="learning-brand" href="#" id="homeLink" aria-label="EduPlatform — на главную">
+            <span class="learning-brand-mark">E</span>
+            <span>EduPlatform</span>
+        </a>
+        <nav class="learning-nav" aria-label="Навигация студента">
+            <button type="button" id="coursesNavButton">Моё обучение</button>
+            <button type="button" id="profileNavButton">Профиль</button>
+            <button class="learning-avatar" type="button" id="avatarButton" aria-label="Открыть профиль">С</button>
+            <button class="learning-logout" type="button" id="logoutButton">Выйти</button>
+        </nav>
+    </header>
+    <div class="learning-progress" id="learningProgress" hidden><span></span></div>
+    <p class="learning-notice" id="message" aria-live="polite"></p>
+    <main id="studentApp" class="learning-app" aria-live="polite">
+        <div class="learning-loader">Загружаем учебный кабинет…</div>
+    </main>
+    <script src="student-learning.js"></script>
 </body>
 </html>

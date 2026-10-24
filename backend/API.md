@@ -58,6 +58,7 @@
 
 - `GET /profile`
 - `GET /courses`
+- `GET /courses/:id/learning-path` — модули, занятия, опубликованные материалы и задания курса.
 - `GET /courses/:id/materials`
 - `GET /materials/:materialId/files`
 - `GET /files/:id/download`
@@ -81,6 +82,8 @@
 - `GET|POST /disciplines`
 - `PATCH|DELETE /disciplines/:id`
 - `GET|POST /courses`
+- `GET|POST /courses/:id/modules`
+- `DELETE /modules/:moduleId` — удалить пустой модуль.
 - `PATCH|DELETE /courses/:id`
 - `GET /groups/:id/students`
 - `GET /students/:id`

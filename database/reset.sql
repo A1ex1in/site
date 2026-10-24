@@ -29,6 +29,7 @@ TRUNCATE TABLE
   materials,
   assignments,
   lessons,
+  course_modules,
   courses,
   student_profiles,
   disciplines,

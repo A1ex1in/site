@@ -5,6 +5,7 @@ const pool = require("../db");
 const config = require("../config");
 const { requireAuth, requireStudent } = require("../middleware/auth");
 const uploadSubmissionFile = require("../middleware/submissionUpload");
+const { parseId } = require("../lib/validation");
 
 const router = express.Router();
 
@@ -76,6 +77,119 @@ router.get("/courses",requireAuth,requireStudent,async (request, response) => {
   } catch (error) {
     console.error("Ошибка получения учебных курсов студента:", error);
     response.status(500).json({ error: "Ошибка получения учебных курсов" });
+  }
+});
+
+// Получить полный учебный путь курса: модули, занятия, материалы и задания
+router.get("/courses/:id/learning-path",requireAuth,requireStudent,async (request, response) => {
+  const courseId = parseId(request.params.id);
+  if (!courseId) return response.status(400).json({ error: "Некорректный идентификатор курса" });
+
+  try {
+    const courseResult = await pool.query(`
+      SELECT c.id, c.academic_year, c.semester, d.name AS discipline_name,
+        d.code AS discipline_code, g.name AS group_name,
+        u.first_name AS teacher_first_name, u.last_name AS teacher_last_name,
+        u.middle_name AS teacher_middle_name
+      FROM courses c
+      JOIN disciplines d ON d.id = c.discipline_id
+      JOIN student_groups g ON g.id = c.group_id
+      JOIN users u ON u.id = c.teacher_id
+      JOIN student_profiles sp ON sp.group_id = c.group_id
+      WHERE c.id = $1 AND sp.user_id = $2
+        AND c.is_active = TRUE AND d.is_active = TRUE
+    `,[courseId,request.user.id]);
+    if (courseResult.rowCount === 0) {
+      return response.status(404).json({ error: "Учебный курс не найден" });
+    }
+
+    const [modulesResult,lessonsResult,materialsResult,assignmentsResult] = await Promise.all([
+      pool.query(`
+        SELECT id, course_id, title, description, sort_order
+        FROM course_modules WHERE course_id = $1
+        ORDER BY sort_order, id
+      `,[courseId]),
+      pool.query(`
+        SELECT id, course_id, module_id, lesson_date::text AS lesson_date,
+          lesson_type, topic, sort_order
+        FROM lessons WHERE course_id = $1
+        ORDER BY sort_order, lesson_date, id
+      `,[courseId]),
+      pool.query(`
+        SELECT m.id, m.course_id, m.lesson_id, m.title, m.description,
+          m.material_type, m.sort_order,
+          COUNT(mf.id)::int AS files_count
+        FROM materials m
+        LEFT JOIN material_files mf ON mf.material_id = m.id
+        WHERE m.course_id = $1 AND m.is_published = TRUE
+        GROUP BY m.id
+        ORDER BY m.sort_order, m.created_at, m.id
+      `,[courseId]),
+      pool.query(`
+        SELECT a.id, a.course_id, a.lesson_id, a.title, a.description,
+          a.deadline, a.max_score, a.sort_order,
+          COUNT(DISTINCT af.id)::int AS files_count,
+          MAX(ss.status::text) AS submission_status,
+          MAX(gr.score) AS score
+        FROM assignments a
+        LEFT JOIN assignment_files af ON af.assignment_id = a.id
+        LEFT JOIN student_submissions ss
+          ON ss.assignment_id = a.id AND ss.student_id = $2
+        LEFT JOIN grade_items gi
+          ON gi.assignment_id = a.id AND gi.item_type = 'assignment'
+        LEFT JOIN grades gr
+          ON gr.grade_item_id = gi.id AND gr.student_id = $2
+        WHERE a.course_id = $1 AND a.is_published = TRUE
+        GROUP BY a.id
+        ORDER BY a.sort_order, a.deadline NULLS LAST, a.created_at, a.id
+      `,[courseId,request.user.id])
+    ]);
+
+    const modules = modulesResult.rows.map((module) => ({ ...module, lessons: [] }));
+    const moduleById = new Map(modules.map((module) => [String(module.id),module]));
+    const looseModule = {
+      id: null,
+      course_id: courseId,
+      title: "Общие материалы курса",
+      description: "Материалы и задания, которые пока не распределены по модулям.",
+      sort_order: 999999,
+      lessons: []
+    };
+    const lessonById = new Map();
+
+    for (const lesson of lessonsResult.rows) {
+      const normalizedLesson = { ...lesson, items: [] };
+      lessonById.set(String(lesson.id),normalizedLesson);
+      const module = lesson.module_id ? moduleById.get(String(lesson.module_id)) : null;
+      (module || looseModule).lessons.push(normalizedLesson);
+    }
+
+    const generalLesson = {
+      id: null,
+      course_id: courseId,
+      module_id: null,
+      lesson_date: null,
+      lesson_type: "other",
+      topic: "Материалы и задания курса",
+      sort_order: 999999,
+      items: []
+    };
+
+    for (const material of materialsResult.rows) {
+      const targetLesson = material.lesson_id ? lessonById.get(String(material.lesson_id)) : null;
+      (targetLesson || generalLesson).items.push({ ...material, kind: "material" });
+    }
+    for (const assignment of assignmentsResult.rows) {
+      const targetLesson = assignment.lesson_id ? lessonById.get(String(assignment.lesson_id)) : null;
+      (targetLesson || generalLesson).items.push({ ...assignment, kind: "assignment" });
+    }
+    if (generalLesson.items.length > 0) looseModule.lessons.push(generalLesson);
+    if (looseModule.lessons.length > 0 || modules.length === 0) modules.push(looseModule);
+
+    response.json({ course: courseResult.rows[0], modules });
+  } catch (error) {
+    console.error("Ошибка получения учебного пути курса:", error);
+    response.status(500).json({ error: "Ошибка получения структуры курса" });
   }
 });
 

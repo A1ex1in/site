@@ -110,9 +110,30 @@
         <section id="courseLessonsSection" hidden>
             <h2 id="courseLessonsTitle">Занятия курса</h2>
 
+            <h3>Модули курса</h3>
+            <form id="moduleForm">
+                <div>
+                    <label for="moduleTitle">Название модуля</label>
+                    <input id="moduleTitle" type="text" maxlength="255" placeholder="Например, Введение" required>
+                </div>
+                <div>
+                    <label for="moduleDescription">Описание</label>
+                    <input id="moduleDescription" type="text" maxlength="4000" placeholder="Коротко о содержании модуля">
+                </div>
+                <button type="submit">Создать модуль</button>
+            </form>
+            <div id="modulesList"></div>
+
             <h3>Создать занятие</h3>
 
             <form id="lessonForm">
+                <div>
+                    <label for="lessonModule">Модуль</label>
+                    <select id="lessonModule">
+                        <option value="">Без модуля</option>
+                    </select>
+                </div>
+
                 <div>
                     <label for="lessonDate">Дата занятия</label>
                     <input id="lessonDate" type="date" required>
@@ -203,6 +224,12 @@
                     </select>
                 </div>
                 <div>
+                    <label for="materialLesson">Занятие</label>
+                    <select id="materialLesson">
+                        <option value="">Общий материал курса</option>
+                    </select>
+                </div>
+                <div>
                     <label for="materialDescription">Описание</label>
                     <input id="materialDescription" type="text">
                 </div>
@@ -240,6 +267,12 @@
                 <div>
                     <label for="assignmentDescription">Описание</label>
                     <textarea id="assignmentDescription"></textarea>
+                </div>
+                <div>
+                    <label for="assignmentLesson">Занятие</label>
+                    <select id="assignmentLesson">
+                        <option value="">Общее задание курса</option>
+                    </select>
                 </div>
                 <div>
                     <label for="assignmentDeadline">Срок выполнения</label>

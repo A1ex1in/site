@@ -13,7 +13,7 @@ const { parseId, normalizeText } = require("../lib/validation");
 router.post("/courses/:id/materials",requireAuth,requireTeacher,async (request, response) => {
   try {
     const courseId = request.params.id;
-    const { title, description, materialType } = request.body;
+    const { title, description, materialType, lessonId } = request.body;
     if (!/^\d+$/.test(courseId)) {
       return response.status(400).json({ error: "Некорректный идентификатор курса" });
     }
@@ -36,17 +36,31 @@ router.post("/courses/:id/materials",requireAuth,requireTeacher,async (request, 
     if (courseResult.rowCount === 0) {
       return response.status(404).json({ error: "Учебный курс не найден" });
     }
+    const normalizedLessonId = lessonId === null || lessonId === undefined || lessonId === "" ? null : parseId(lessonId);
+    if (lessonId && !normalizedLessonId) {
+      return response.status(400).json({ error: "Некорректное занятие" });
+    }
+    if (normalizedLessonId) {
+      const lessonResult = await pool.query(`
+        SELECT id FROM lessons WHERE id = $1 AND course_id = $2
+      `,[normalizedLessonId,courseId]);
+      if (lessonResult.rowCount === 0) {
+        return response.status(400).json({ error: "Выбранное занятие не относится к этому курсу" });
+      }
+    }
     const result = await pool.query(`
       INSERT INTO materials (
         course_id,
+        lesson_id,
         title,
         description,
         material_type
       )
-      VALUES ($1, $2, $3, $4)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING
         id,
         course_id,
+        lesson_id,
         title,
         description,
         material_type,
@@ -55,6 +69,7 @@ router.post("/courses/:id/materials",requireAuth,requireTeacher,async (request, 
         updated_at
     `,[
       courseId,
+      normalizedLessonId,
       normalizedTitle,
       typeof description === "string" ? description.trim() || null : null,
       normalizedType
@@ -87,17 +102,22 @@ router.get("/courses/:id/materials",requireAuth,requireTeacher,async (request, r
     }
     const result = await pool.query(`
       SELECT
-        id,
-        course_id,
-        title,
-        description,
-        material_type,
-        is_published,
-        created_at,
-        updated_at
-      FROM materials
-      WHERE course_id = $1
-      ORDER BY created_at DESC, id DESC
+        m.id,
+        m.course_id,
+        m.lesson_id,
+        m.title,
+        m.description,
+        m.material_type,
+        m.is_published,
+        m.created_at,
+        m.updated_at,
+        l.topic AS lesson_topic,
+        cm.title AS module_title
+      FROM materials m
+      LEFT JOIN lessons l ON l.id = m.lesson_id
+      LEFT JOIN course_modules cm ON cm.id = l.module_id
+      WHERE m.course_id = $1
+      ORDER BY m.created_at DESC, m.id DESC
     `,[courseId]);
     response.json(result.rows);
   } catch (error) {
@@ -202,6 +222,83 @@ router.get("/courses",requireAuth,requireTeacher,async (request, response) => {
   } catch (error) {
     console.error("Ошибка получения учебных курсов:", error);
     response.status(500).json({ error: "Ошибка получения списка учебных курсов" });
+  }
+});
+
+// Получить модули учебного курса
+router.get("/courses/:id/modules",requireAuth,requireTeacher,async (request, response) => {
+  const courseId = parseId(request.params.id);
+  if (!courseId) return response.status(400).json({ error: "Некорректный идентификатор курса" });
+  try {
+    const courseResult = await pool.query(`
+      SELECT id FROM courses WHERE id = $1 AND teacher_id = $2
+    `,[courseId,request.user.id]);
+    if (courseResult.rowCount === 0) return response.status(404).json({ error: "Учебный курс не найден" });
+    const result = await pool.query(`
+      SELECT cm.id, cm.course_id, cm.title, cm.description, cm.sort_order,
+        COUNT(DISTINCT l.id)::int AS lessons_count
+      FROM course_modules cm
+      LEFT JOIN lessons l ON l.module_id = cm.id
+      WHERE cm.course_id = $1
+      GROUP BY cm.id
+      ORDER BY cm.sort_order, cm.id
+    `,[courseId]);
+    response.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка получения модулей курса:", error);
+    response.status(500).json({ error: "Ошибка получения модулей курса" });
+  }
+});
+
+// Создать модуль учебного курса
+router.post("/courses/:id/modules",requireAuth,requireTeacher,async (request, response) => {
+  const courseId = parseId(request.params.id);
+  if (!courseId) return response.status(400).json({ error: "Некорректный идентификатор курса" });
+  const title = normalizeText(request.body.title,{ maxLength:255, required:true });
+  const description = normalizeText(request.body.description,{ maxLength:4000 });
+  if (!title) return response.status(400).json({ error: "Укажите название модуля" });
+  if (description === null) return response.status(400).json({ error: "Описание модуля слишком длинное" });
+  try {
+    const courseResult = await pool.query(`
+      SELECT id FROM courses WHERE id = $1 AND teacher_id = $2 AND is_active = TRUE
+    `,[courseId,request.user.id]);
+    if (courseResult.rowCount === 0) return response.status(404).json({ error: "Активный учебный курс не найден" });
+    const orderResult = await pool.query(`
+      SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM course_modules WHERE course_id = $1
+    `,[courseId]);
+    const result = await pool.query(`
+      INSERT INTO course_modules (course_id, title, description, sort_order)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, course_id, title, description, sort_order, created_at, updated_at
+    `,[courseId,title,description || null,orderResult.rows[0].next_order]);
+    response.status(201).json({ message: "Модуль создан", module: result.rows[0] });
+  } catch (error) {
+    console.error("Ошибка создания модуля курса:", error);
+    response.status(500).json({ error: "Ошибка создания модуля курса" });
+  }
+});
+
+// Удалить пустой модуль учебного курса
+router.delete("/modules/:moduleId",requireAuth,requireTeacher,async (request, response) => {
+  const moduleId = parseId(request.params.moduleId);
+  if (!moduleId) return response.status(400).json({ error: "Некорректный идентификатор модуля" });
+  try {
+    const result = await pool.query(`
+      DELETE FROM course_modules cm
+      USING courses c
+      WHERE cm.id = $1
+        AND c.id = cm.course_id
+        AND c.teacher_id = $2
+        AND NOT EXISTS (SELECT 1 FROM lessons l WHERE l.module_id = cm.id)
+      RETURNING cm.id
+    `,[moduleId,request.user.id]);
+    if (result.rowCount === 0) {
+      return response.status(409).json({ error: "Модуль не найден или в нём уже есть занятия" });
+    }
+    response.json({ message: "Модуль удалён" });
+  } catch (error) {
+    console.error("Ошибка удаления модуля курса:", error);
+    response.status(500).json({ error: "Ошибка удаления модуля курса" });
   }
 });
 
@@ -679,6 +776,7 @@ router.get("/courses/:id/assignments",requireAuth,requireTeacher,async (request,
       SELECT
         a.id,
         a.course_id,
+        a.lesson_id,
         a.title,
         a.description,
         a.deadline,
@@ -687,9 +785,13 @@ router.get("/courses/:id/assignments",requireAuth,requireTeacher,async (request,
         a.published_at,
         a.created_at,
         a.updated_at,
-        gi.grade_date::text AS grade_date
+        gi.grade_date::text AS grade_date,
+        l.topic AS lesson_topic,
+        cm.title AS module_title
       FROM assignments a
       LEFT JOIN grade_items gi ON gi.assignment_id = a.id
+      LEFT JOIN lessons l ON l.id = a.lesson_id
+      LEFT JOIN course_modules cm ON cm.id = l.module_id
       WHERE a.course_id = $1
       ORDER BY a.created_at DESC, a.id DESC
     `,[courseId]);
@@ -706,7 +808,7 @@ router.post("/courses/:id/assignments",requireAuth,requireTeacher,async (request
 
   try {
     const courseId = request.params.id;
-    const { title, description, gradeDate, deadline, maxScore } = request.body;
+    const { title, description, gradeDate, deadline, maxScore, lessonId } = request.body;
 
     if (!/^\d+$/.test(courseId)) {
       return response.status(400).json({ error: "Некорректный идентификатор курса" });
@@ -768,19 +870,36 @@ router.post("/courses/:id/assignments",requireAuth,requireTeacher,async (request
       return response.status(404).json({ error: "Активный учебный курс не найден" });
     }
 
+    const normalizedLessonId = lessonId === null || lessonId === undefined || lessonId === "" ? null : parseId(lessonId);
+    if (lessonId && !normalizedLessonId) {
+      await client.query("ROLLBACK");
+      return response.status(400).json({ error: "Некорректное занятие" });
+    }
+    if (normalizedLessonId) {
+      const lessonResult = await client.query(`
+        SELECT id FROM lessons WHERE id = $1 AND course_id = $2
+      `,[normalizedLessonId,courseId]);
+      if (lessonResult.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return response.status(400).json({ error: "Выбранное занятие не относится к этому курсу" });
+      }
+    }
+
     // Создание задания
     const assignmentResult = await client.query(`
       INSERT INTO assignments (
         course_id,
+        lesson_id,
         title,
         description,
         deadline,
         max_score
       )
-      VALUES ($1, $2, $3, $4, $5)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING
         id,
         course_id,
+        lesson_id,
         title,
         description,
         deadline,
@@ -791,6 +910,7 @@ router.post("/courses/:id/assignments",requireAuth,requireTeacher,async (request
         updated_at
     `,[
       courseId,
+      normalizedLessonId,
       normalizedTitle,
       normalizedDescription || null,
       normalizedDeadline,
@@ -803,13 +923,14 @@ router.post("/courses/:id/assignments",requireAuth,requireTeacher,async (request
     const gradeItemResult = await client.query(`
       INSERT INTO grade_items (
         course_id,
+        lesson_id,
         assignment_id,
         title,
         item_type,
         grade_date,
         max_score
       )
-      VALUES ($1, $2, $3, 'assignment', $4, $5)
+      VALUES ($1, $2, $3, $4, 'assignment', $5, $6)
       RETURNING
         id,
         course_id,
@@ -821,6 +942,7 @@ router.post("/courses/:id/assignments",requireAuth,requireTeacher,async (request
         max_score
     `,[
       courseId,
+      normalizedLessonId,
       assignment.id,
       normalizedTitle,
       normalizedGradeDate,
@@ -1694,7 +1816,7 @@ router.get("/courses/:id/journal",requireAuth,requireTeacher,async (request, res
 router.post("/courses/:id/lessons",requireAuth,requireTeacher,async (request, response) => {
   try {
     const courseId = request.params.id;
-    const { lessonDate, lessonType, topic } = request.body;
+    const { lessonDate, lessonType, topic, moduleId } = request.body;
     if (!/^\d+$/.test(courseId)) {
       return response.status(400).json({ error: "Некорректный идентификатор курса" });
     }
@@ -1720,12 +1842,25 @@ router.post("/courses/:id/lessons",requireAuth,requireTeacher,async (request, re
     if (courseResult.rowCount === 0) {
       return response.status(404).json({ error: "Учебный курс не найден" });
     }
+    const normalizedModuleId = moduleId === null || moduleId === undefined || moduleId === "" ? null : parseId(moduleId);
+    if (moduleId && !normalizedModuleId) {
+      return response.status(400).json({ error: "Некорректный модуль" });
+    }
+    if (normalizedModuleId) {
+      const moduleResult = await pool.query(`
+        SELECT id FROM course_modules WHERE id = $1 AND course_id = $2
+      `,[normalizedModuleId,courseId]);
+      if (moduleResult.rowCount === 0) {
+        return response.status(400).json({ error: "Выбранный модуль не относится к этому курсу" });
+      }
+    }
     const result = await pool.query(`
-      INSERT INTO lessons (course_id, lesson_date, lesson_type, topic)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, course_id, lesson_date::text AS lesson_date, lesson_type, topic, sort_order, created_at, updated_at
+      INSERT INTO lessons (course_id, module_id, lesson_date, lesson_type, topic)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, course_id, module_id, lesson_date::text AS lesson_date, lesson_type, topic, sort_order, created_at, updated_at
     `,[
       courseId,
+      normalizedModuleId,
       normalizedDate,
       normalizedType,
       normalizedTopic || null
@@ -1760,10 +1895,13 @@ router.get("/courses/:id/lessons",requireAuth,requireTeacher,async (request, res
       return response.status(404).json({ error: "Учебный курс не найден" });
     }
     const result = await pool.query(`
-      SELECT id, course_id, lesson_date::text AS lesson_date, lesson_type, topic, sort_order, created_at, updated_at
-      FROM lessons
-      WHERE course_id = $1
-      ORDER BY lesson_date, sort_order, id
+      SELECT l.id, l.course_id, l.module_id, l.lesson_date::text AS lesson_date,
+        l.lesson_type, l.topic, l.sort_order, l.created_at, l.updated_at,
+        cm.title AS module_title
+      FROM lessons l
+      LEFT JOIN course_modules cm ON cm.id = l.module_id
+      WHERE l.course_id = $1
+      ORDER BY cm.sort_order NULLS LAST, l.sort_order, l.lesson_date, l.id
     `,[courseId]);
     response.json(result.rows);
   } catch (error) {
@@ -2376,7 +2514,7 @@ router.patch("/lessons/:lessonId",requireAuth,requireTeacher,async (request, res
 
   try {
     const lessonId = request.params.lessonId;
-    const { lessonDate, lessonType, topic } = request.body;
+    const { lessonDate, lessonType, topic, moduleId } = request.body;
 
     if (!/^\d+$/.test(lessonId)) {
       return response.status(400).json({ error: "Некорректный идентификатор занятия" });
@@ -2424,6 +2562,23 @@ router.patch("/lessons/:lessonId",requireAuth,requireTeacher,async (request, res
 
     const lesson = lessonResult.rows[0];
     const dateChanged = lesson.lesson_date !== normalizedDate;
+    const normalizedModuleId = moduleId === null || moduleId === undefined || moduleId === "" ? null : parseId(moduleId);
+    if (moduleId && !normalizedModuleId) {
+      await client.query("ROLLBACK");
+      return response.status(400).json({ error: "Некорректный модуль" });
+    }
+    if (normalizedModuleId) {
+      const moduleResult = await client.query(`
+        SELECT cm.id
+        FROM course_modules cm
+        JOIN lessons l ON l.course_id = cm.course_id
+        WHERE cm.id = $1 AND l.id = $2
+      `,[normalizedModuleId,lessonId]);
+      if (moduleResult.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return response.status(400).json({ error: "Выбранный модуль не относится к этому курсу" });
+      }
+    }
 
     if (dateChanged) {
       const itemsResult = await client.query(`
@@ -2457,18 +2612,20 @@ router.patch("/lessons/:lessonId",requireAuth,requireTeacher,async (request, res
         lesson_date = $1,
         lesson_type = $2,
         topic = $3,
+        module_id = $4,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $4
+      WHERE id = $5
       RETURNING
         id,
         course_id,
+        module_id,
         lesson_date::text AS lesson_date,
         lesson_type,
         topic,
         sort_order,
         created_at,
         updated_at
-    `,[normalizedDate,normalizedType,normalizedTopic || null,lessonId]);
+    `,[normalizedDate,normalizedType,normalizedTopic || null,normalizedModuleId,lessonId]);
 
     if (dateChanged) {
       await client.query(`

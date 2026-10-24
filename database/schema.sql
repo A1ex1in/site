@@ -197,11 +197,33 @@ CREATE INDEX courses_group_idx
 ON courses (group_id, is_active);
 
 -- ------------------------------------------------------------
+-- Модули учебного курса
+-- ------------------------------------------------------------
+CREATE TABLE course_modules (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  course_id BIGINT NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_course_module_course
+    FOREIGN KEY (course_id)
+    REFERENCES courses(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX course_modules_course_order_idx
+ON course_modules (course_id, sort_order, id);
+
+-- ------------------------------------------------------------
 -- Учебные занятия
 -- ------------------------------------------------------------
 CREATE TABLE lessons (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   course_id BIGINT NOT NULL,
+  module_id BIGINT,
   lesson_date DATE NOT NULL,
   lesson_type VARCHAR(50) NOT NULL,
   topic VARCHAR(255),
@@ -212,11 +234,19 @@ CREATE TABLE lessons (
   CONSTRAINT fk_lesson_course
     FOREIGN KEY (course_id)
     REFERENCES courses(id)
-    ON DELETE CASCADE
+    ON DELETE CASCADE,
+
+  CONSTRAINT fk_lesson_module
+    FOREIGN KEY (module_id)
+    REFERENCES course_modules(id)
+    ON DELETE SET NULL
 );
 
 CREATE INDEX lessons_course_date_idx
 ON lessons (course_id, lesson_date);
+
+CREATE INDEX lessons_module_order_idx
+ON lessons (module_id, sort_order, lesson_date, id);
 
 -- ------------------------------------------------------------
 -- Посещаемость занятий
@@ -278,9 +308,11 @@ ON user_sessions (expire);
 CREATE TABLE materials (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     course_id BIGINT NOT NULL,
+    lesson_id BIGINT,
     title VARCHAR(255) NOT NULL,
     description TEXT,
     material_type VARCHAR(50) NOT NULL DEFAULT 'other',
+    sort_order INTEGER NOT NULL DEFAULT 0,
     is_published BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -289,6 +321,11 @@ CREATE TABLE materials (
         FOREIGN KEY (course_id)
         REFERENCES courses(id)
         ON DELETE CASCADE,
+
+    CONSTRAINT fk_material_lesson
+        FOREIGN KEY (lesson_id)
+        REFERENCES lessons(id)
+        ON DELETE SET NULL,
 
     CONSTRAINT material_type_check
         CHECK (
@@ -303,6 +340,9 @@ CREATE TABLE materials (
 
 CREATE INDEX materials_course_idx
 ON materials (course_id, is_published);
+
+CREATE INDEX materials_lesson_order_idx
+ON materials (lesson_id, sort_order, id);
 
 
 -- ------------------------------------------------------------
@@ -345,12 +385,14 @@ ON material_files (material_id);
 CREATE TABLE assignments (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     course_id BIGINT NOT NULL,
+    lesson_id BIGINT,
 
     title VARCHAR(255) NOT NULL,
     description TEXT,
 
     deadline TIMESTAMPTZ,
     max_score NUMERIC(6,2) NOT NULL DEFAULT 5,
+    sort_order INTEGER NOT NULL DEFAULT 0,
 
     is_published BOOLEAN NOT NULL DEFAULT FALSE,
     published_at TIMESTAMPTZ,
@@ -363,12 +405,20 @@ CREATE TABLE assignments (
         REFERENCES courses(id)
         ON DELETE CASCADE,
 
+    CONSTRAINT fk_assignment_lesson
+        FOREIGN KEY (lesson_id)
+        REFERENCES lessons(id)
+        ON DELETE SET NULL,
+
     CONSTRAINT assignment_max_score_check
         CHECK (max_score > 0)
 );
 
 CREATE INDEX assignments_course_idx
 ON assignments (course_id);
+
+CREATE INDEX assignments_lesson_order_idx
+ON assignments (lesson_id, sort_order, id);
 
 -- ------------------------------------------------------------
 -- Оцениваемые элементы журнала

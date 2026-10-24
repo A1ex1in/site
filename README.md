@@ -25,7 +25,8 @@ Backend сам раздаёт файлы frontend, поэтому для лок�
 
 Если база была создана до этого обновления, последовательно выполните
 `database/migrations/001_backend_completion.sql` и
-`database/migrations/002_admin_and_attendance.sql`, затем снова выполните
+`database/migrations/002_admin_and_attendance.sql`, а затем
+`database/migrations/003_learning_path.sql`. После этого снова выполните
 `database/seed.sql` — он добавляет только отсутствующие тестовые записи.
 
 Тестовые пользователи из `seed.sql`:
