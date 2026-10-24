@@ -680,7 +680,7 @@ async function loadMaterials(courseId, courseName = "") {
     }
     selectedCourseId = courseId;
     selectedCourseName = courseName;
-    journalSection.hidden = true;
+    window.TeacherUI?.setCoursePanel("courseMaterialsSection");
     courseMaterialsSection.hidden = false;
     courseMaterialsTitle.textContent = courseName ? `Материалы курса: ${courseName}` : "Материалы курса";
     materialsList.innerHTML = "";
@@ -741,25 +741,18 @@ async function loadCourses() {
       const infoElement = document.createElement("span");
       infoElement.textContent = ` — ${course.group_name}` + ` — ${course.academic_year}` + ` — ${course.semester} семестр`;
 
+      const courseName = `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`;
       const openButton = document.createElement("button");
-      openButton.textContent = "Материалы";
-      openButton.addEventListener("click",async () => { await loadMaterials(course.id, `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`); });
-
-      const assignmentsButton = document.createElement("button");
-      assignmentsButton.textContent = "Задания";
-      assignmentsButton.addEventListener("click",async () => { await loadAssignments(course.id, `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`); });
-
-      const journalButton = document.createElement("button");
-      journalButton.textContent = "Журнал";
-      journalButton.addEventListener("click", async () => { await loadJournal(course.id, `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`); });
-
-      const lessonsButton = document.createElement("button");
-      lessonsButton.textContent = "Занятия";
-      lessonsButton.addEventListener("click", async () => { await loadLessons(course.id, `${course.discipline_name} — ${course.group_name} — ${course.academic_year} — ${course.semester} семестр`); });
+      openButton.textContent = "Открыть курс";
+      openButton.className = "teacher-open-course";
+      openButton.addEventListener("click",async () => {
+        if (window.TeacherUI) await window.TeacherUI.openCourse({ id:course.id,name:courseName });
+        else await loadLessons(course.id,courseName);
+      });
 
       container.appendChild(disciplineElement);
       container.appendChild(infoElement);
-      container.appendChild(window.EduUI.createActionGroup(openButton, assignmentsButton, journalButton, lessonsButton));
+      container.appendChild(window.EduUI.createActionGroup(openButton));
       coursesList.appendChild(container);
     }
   } catch (error) {
@@ -781,7 +774,7 @@ async function loadAssignments(courseId, courseName = "") {
     }
     selectedAssignmentCourseId = courseId;
     selectedAssignmentCourseName = courseName;
-    journalSection.hidden = true;
+    window.TeacherUI?.setCoursePanel("courseAssignmentsSection");
     courseAssignmentsSection.hidden = false;
     courseAssignmentsTitle.textContent = `Задания курса: ${courseName}`;
     assignmentsList.innerHTML = "";
@@ -1365,6 +1358,7 @@ async function loadJournal(courseId, courseName = "") {
     }
     submissionsSection.hidden = true;
     submissionDetailsSection.hidden = true;
+    window.TeacherUI?.setCoursePanel("journalSection");
     journalSection.hidden = false;
     journalTitle.textContent = `Электронный журнал: ${courseName}`;
     journalContainer.innerHTML = "";
@@ -1530,9 +1524,7 @@ async function loadLessons(courseId, courseName = "") {
     selectedLessonsCourseId = courseId;
     selectedLessonsCourseName = courseName;
 
-    journalSection.hidden = true;
-    gradeItemsSection.hidden = true;
-    attendanceEditorSection.hidden = true;
+    window.TeacherUI?.setCoursePanel("courseLessonsSection");
     courseLessonsSection.hidden = false;
 
     courseLessonsTitle.textContent = `Занятия курса: ${courseName}`;

@@ -47,7 +47,7 @@
       return [["Главная","home","#dashboardOverview"],["Группы","calendar","#adminGroupForm"],["Пользователи","users","#userForm"],["Список аккаунтов","user","#adminUsersSection"],["Нагрузка","chart","#teacherLoadSection"],["Посещаемость","calendar","#attendanceSection"]];
     }
     return role === "teacher"
-      ? [["Главная","home","#dashboardOverview"],["Курсы","book","#courseForm"],["Материалы","folder","#courseMaterialsSection"],["Задания","task","#courseAssignmentsSection"],["Журнал","chart","#journalSection"],["Студенты","users","#studentsList"],["Группы","calendar","#groupForm"]]
+      ? [["Главная","home","#teacherHomeView"],["Курсы","book","#teacherCoursesView"],["Студенты","users","#teacherStudentsView"]]
       : [["Главная","home","#dashboardOverview"],["Мои курсы","book","#coursesList"],["Материалы","folder","#courseMaterialsSection"],["Задания","task","#courseAssignmentsSection"],["Мой профиль","user","#profile"]];
   }
 
@@ -231,7 +231,7 @@
             </section>
             <section class="rail-card"><h2 class="rail-card-title" id="eventsTitle">События</h2><div class="rail-list" id="calendarEvents"><p class="rail-empty">На выбранную дату событий нет.</p></div></section>
             <section class="rail-card"><h2 class="rail-card-title">Уведомления</h2><div class="rail-list" id="railNotifications"><p class="rail-empty">Новых уведомлений нет.</p></div></section>
-            <section class="rail-card"><h2 class="rail-card-title">Быстрые действия</h2><div class="quick-actions">${role === "admin" ? '<button class="quick-action" data-quick-target="#adminGroupForm">Создать группу</button><button class="quick-action" data-quick-target="#userForm">Добавить пользователя</button><button class="quick-action" data-quick-target="#teacherLoadSection">Нагрузка</button><button class="quick-action" data-quick-target="#attendanceSection">Посещаемость</button>' : role === "teacher" ? '<button class="quick-action" data-quick-target="#courseForm">Создать курс</button><button class="quick-action" data-quick-target="#assignmentForm">Создать задание</button><button class="quick-action" data-quick-target="#materialForm">Добавить материал</button><button class="quick-action" data-quick-target="#groupForm">Добавить группу</button>' : '<button class="quick-action" data-quick-target="#coursesList">Мои курсы</button><button class="quick-action" data-quick-target="#courseAssignmentsSection">Задания</button><button class="quick-action" data-quick-target="#courseMaterialsSection">Материалы</button><button class="quick-action" data-quick-target="#profile">Профиль</button>'}</div></section>
+            <section class="rail-card"><h2 class="rail-card-title">Быстрые действия</h2><div class="quick-actions">${role === "admin" ? '<button class="quick-action" data-quick-target="#adminGroupForm">Создать группу</button><button class="quick-action" data-quick-target="#userForm">Добавить пользователя</button><button class="quick-action" data-quick-target="#teacherLoadSection">Нагрузка</button><button class="quick-action" data-quick-target="#attendanceSection">Посещаемость</button>' : role === "teacher" ? '<button class="quick-action" data-quick-target="#teacherCoursesView">Открыть курсы</button><button class="quick-action" data-quick-target="#courseForm">Создать курс</button><button class="quick-action" data-quick-target="#teacherStudentsView">Студенты</button><button class="quick-action" data-quick-target="#groupForm">Создать группу</button>' : '<button class="quick-action" data-quick-target="#coursesList">Мои курсы</button><button class="quick-action" data-quick-target="#courseAssignmentsSection">Задания</button><button class="quick-action" data-quick-target="#courseMaterialsSection">Материалы</button><button class="quick-action" data-quick-target="#profile">Профиль</button>'}</div></section>
           </aside>
         </div>
       </main>`;
@@ -250,6 +250,10 @@
     });
     shell.querySelectorAll("[data-quick-target]").forEach((button) => button.addEventListener("click", () => {
       const target = document.querySelector(button.dataset.quickTarget);
+      const teacherView = target?.closest(".teacher-view");
+      if (role === "teacher" && teacherView) window.TeacherUI?.activateView(teacherView);
+      const details = target?.closest("details");
+      if (details) details.open = true;
       if (target && !target.hidden) target.scrollIntoView({ behavior:"smooth", block:"center" });
     }));
     renderCalendar();
@@ -261,7 +265,11 @@
     shell.querySelector(".sidebar-backdrop").addEventListener("click", closeMenu);
     shell.querySelectorAll(".nav-button").forEach((button) => button.addEventListener("click", () => {
       const target = document.querySelector(button.dataset.target);
-      if (target && !target.hidden) target.scrollIntoView({ behavior:"smooth", block:"start" });
+      if (role === "teacher" && target?.classList.contains("teacher-view")) {
+        window.TeacherUI?.activateView(target);
+      } else if (target && !target.hidden) {
+        target.scrollIntoView({ behavior:"smooth", block:"start" });
+      }
       shell.querySelectorAll(".nav-button").forEach((item) => item.classList.remove("is-active"));
       button.classList.add("is-active");
       closeMenu();
