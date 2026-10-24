@@ -81,9 +81,9 @@
   });
 
   function collapseCourseForm(sectionId,formId,listId,title,subtitle,listTitle = "") {
-    const section = byId(sectionId);
-    const form = byId(formId);
-    const list = byId(listId);
+    const section = workspace.querySelector(`#${sectionId}`) || byId(sectionId);
+    const form = section?.querySelector(`#${formId}`) || byId(formId);
+    const list = section?.querySelector(`#${listId}`) || byId(listId);
     if (!section || !form || !list) return;
     section.querySelectorAll(":scope > h3:not(.teacher-list-title), :scope > h4").forEach((heading) => heading.remove());
     const panel = createPanel(title,subtitle,[form]);
@@ -139,23 +139,24 @@
     }
   });
 
-  const groupTitle = byId("selectedGroupName");
+  const groupSection = studentsView.querySelector("#groupStudentsSection");
+  const groupTitle = groupSection?.querySelector("#selectedGroupName");
   const groupHeader = element("header","teacher-drilldown-header");
   const groupBackButton = document.createElement("button");
   groupBackButton.type = "button";
   groupBackButton.textContent = "← К группам";
-  groupHeader.append(groupBackButton,groupTitle);
-  byId("groupStudentsSection").prepend(groupHeader);
+  if (groupTitle) groupHeader.append(groupBackButton,groupTitle);
+  if (groupSection) groupSection.prepend(groupHeader);
 
-  const studentSection = byId("studentDetailsSection");
-  const studentTitle = studentSection.querySelector(":scope > h3");
-  studentSection.querySelector(":scope > h4")?.classList.add("teacher-subheading");
+  const studentSection = studentsView.querySelector("#studentDetailsSection");
+  const studentTitle = studentSection?.querySelector(":scope > h3");
+  studentSection?.querySelector(":scope > h4")?.classList.add("teacher-subheading");
   const studentHeader = element("header","teacher-drilldown-header");
   const studentBackButton = document.createElement("button");
   studentBackButton.type = "button";
   studentBackButton.textContent = "← К студентам группы";
-  studentHeader.append(studentBackButton,studentTitle);
-  studentSection.prepend(studentHeader);
+  if (studentTitle) studentHeader.append(studentBackButton,studentTitle);
+  if (studentSection) studentSection.prepend(studentHeader);
 
   content.append(homeView,coursesView,studentsView);
 
@@ -183,8 +184,8 @@
 
   function showStudentPanel(panelId) {
     [groupsPanel,requestsPanel].forEach((panel) => { panel.hidden = panel.id !== panelId; });
-    byId("groupStudentsSection").hidden = true;
-    byId("studentDetailsSection").hidden = true;
+    if (groupSection) groupSection.hidden = true;
+    if (studentSection) studentSection.hidden = true;
     studentTabs.querySelectorAll("button").forEach((button) => {
       button.classList.toggle("is-active",button.dataset.studentPanel === panelId);
     });
@@ -193,17 +194,19 @@
   function openGroupDetails() {
     groupsPanel.hidden = true;
     requestsPanel.hidden = true;
-    byId("studentDetailsSection").hidden = true;
-    byId("groupStudentsSection").hidden = false;
-    byId("groupStudentsSection").scrollIntoView({ behavior:"smooth",block:"start" });
+    if (studentSection) studentSection.hidden = true;
+    if (!groupSection) return;
+    groupSection.hidden = false;
+    groupSection.scrollIntoView({ behavior:"smooth",block:"start" });
   }
 
   function openStudentDetails() {
     groupsPanel.hidden = true;
     requestsPanel.hidden = true;
-    byId("groupStudentsSection").hidden = true;
-    byId("studentDetailsSection").hidden = false;
-    byId("studentDetailsSection").scrollIntoView({ behavior:"smooth",block:"start" });
+    if (groupSection) groupSection.hidden = true;
+    if (!studentSection) return;
+    studentSection.hidden = false;
+    studentSection.scrollIntoView({ behavior:"smooth",block:"start" });
   }
 
   function closeCourseDetail() {
@@ -283,8 +286,8 @@
   studentTabs.querySelectorAll("button").forEach((button) => {
     button.addEventListener("click",() => showStudentPanel(button.dataset.studentPanel));
   });
-  groupBackButton.addEventListener("click",() => showStudentPanel("teacherGroupsPanel"));
-  studentBackButton.addEventListener("click",openGroupDetails);
+  if (groupSection) groupBackButton.addEventListener("click",() => showStudentPanel("teacherGroupsPanel"));
+  if (studentSection) studentBackButton.addEventListener("click",openGroupDetails);
   drawerBackdrop.addEventListener("click",closeCourseDetail);
   document.addEventListener("keydown",(event) => {
     if (event.key === "Escape" && !drawerBackdrop.hidden) closeCourseDetail();
