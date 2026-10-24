@@ -276,7 +276,7 @@ changeGroupForm.addEventListener("submit", async (event) => {
       await loadStudentDetails(selectedStudentId);
       await loadGroups();
       if (selectedGroupId) {
-        await loadGroupStudents(selectedGroupId);
+        await loadGroupStudents(selectedGroupId,false);
       }
     } catch (error) {
       console.error("Ошибка изменения группы:", error);
@@ -314,7 +314,7 @@ studentStatusButton.addEventListener("click", async () => {
       );
       await loadGroups();
       if (selectedGroupId) {
-        await loadGroupStudents(selectedGroupId);
+        await loadGroupStudents(selectedGroupId,false);
       }
     } catch (error) {
       console.error("Ошибка изменения статуса:", error);
@@ -851,7 +851,7 @@ async function loadAssignmentFiles(assignmentId, assignmentTitle) {
     }
     selectedAssignmentId = assignmentId;
     selectedAssignmentTitle = assignmentTitle;
-    assignmentFilesSection.hidden = false;
+    window.TeacherUI?.openCourseDetail("assignmentFilesSection");
     assignmentFilesTitle.textContent = `Файлы задания: ${assignmentTitle}`;
     assignmentFilesList.innerHTML = "";
     await loadAssignmentMaterialFiles(assignmentId);
@@ -1048,7 +1048,7 @@ async function loadGroups() {
   }
 }
 
-async function loadGroupStudents(groupId) {
+async function loadGroupStudents(groupId,openPanel = true) {
   selectedGroupId = groupId;
   try {
     const response = await fetch(`${apiUrl}/api/teacher/groups/${groupId}/students`,
@@ -1063,7 +1063,7 @@ async function loadGroupStudents(groupId) {
     }
     selectedGroupName.textContent = `Студенты группы ${data.group.name}`;
     groupStudentsList.innerHTML = "";
-    groupStudentsSection.hidden = false;
+    if (openPanel) window.TeacherUI?.openGroupDetails();
     if (data.students.length === 0) {
       groupStudentsList.textContent = "В этой группе пока нет студентов.";
       return;
@@ -1075,11 +1075,11 @@ async function loadGroupStudents(groupId) {
       const nameElement = document.createElement("strong");
       nameElement.textContent = fullName;
       const infoElement = document.createElement("span");
-      infoElement.textContent = ` — ${student.email}`;
+      infoElement.textContent = student.email;
       if (student.student_number) {
-          infoElement.textContent += ` — № ${student.student_number}`;
+          infoElement.textContent += ` · № ${student.student_number}`;
       }
-      infoElement.textContent += ` — статус: ${student.status}`;
+      infoElement.textContent += ` · ${student.status === "blocked" ? "заблокирован" : "активен"}`;
       const openButton = document.createElement("button");
       openButton.textContent = "Открыть";
       openButton.addEventListener("click", async () => {
@@ -1117,34 +1117,29 @@ async function loadStudentDetails(studentId) {
     const fullName = [student.last_name, student.first_name, student.middle_name].filter(Boolean).join(" ");
 
     studentDetails.innerHTML = "";
-
-    const nameElement = document.createElement("p");
-    nameElement.textContent = `ФИО: ${fullName}`;
-
-    const emailElement = document.createElement("p");
-    emailElement.textContent = `Email: ${student.email}`;
-
-    const numberElement = document.createElement("p");
-    numberElement.textContent = `Номер студента: ${student.student_number ?? "Не указан"}`;
-
-    const statusElement = document.createElement("p");
-    statusElement.textContent = `Статус: ${student.status}`;
-
-    const groupElement = document.createElement("p");
-    groupElement.textContent = `Группа: ${student.group_name ?? "Не назначена"}`;
-
-    studentDetails.appendChild(nameElement);
-    studentDetails.appendChild(emailElement);
-    studentDetails.appendChild(numberElement);
-    studentDetails.appendChild(statusElement);
-    studentDetails.appendChild(groupElement);
+    studentDetails.className = "teacher-student-summary";
+    [
+      ["ФИО",fullName],
+      ["Email",student.email],
+      ["Номер студента",student.student_number ?? "Не указан"],
+      ["Статус",student.status === "blocked" ? "Заблокирован" : "Активен"],
+      ["Группа",student.group_name ?? "Не назначена"]
+    ].forEach(([label,value]) => {
+      const field = document.createElement("div");
+      const labelElement = document.createElement("span");
+      const valueElement = document.createElement("strong");
+      labelElement.textContent = label;
+      valueElement.textContent = value;
+      field.append(labelElement,valueElement);
+      studentDetails.appendChild(field);
+    });
     await loadGroupsForStudent(student.group_id);
     if (student.status === "blocked") {
       studentStatusButton.textContent = "Разблокировать";
     } else {
       studentStatusButton.textContent = "Заблокировать";
     }
-    studentDetailsSection.hidden = false;
+    window.TeacherUI?.openStudentDetails();
   } catch (error) {
     console.error("Ошибка загрузки студента:", error);
     message.textContent = "Не удалось загрузить данные студента.";
@@ -1189,7 +1184,7 @@ async function loadMaterialFiles(materialId, materialTitle) {
     }
     selectedMaterialId = materialId;
     selectedMaterialTitle = materialTitle;
-    materialFilesSection.hidden = false;
+    window.TeacherUI?.openCourseDetail("materialFilesSection");
     materialFilesTitle.textContent = `Файлы материала: ${materialTitle}`;
     materialFilesList.innerHTML = "";
     if (data.length === 0) {
@@ -1273,8 +1268,7 @@ async function loadSubmissions(assignmentId, assignmentTitle) {
     }
     selectedSubmissionsAssignmentId = assignmentId;
     selectedSubmissionsAssignmentTitle = assignmentTitle;
-    submissionsSection.hidden = false;
-    submissionDetailsSection.hidden = true;
+    window.TeacherUI?.openCourseDetail("submissionsSection");
     submissionsTitle.textContent = `Работы студентов: ${assignmentTitle}`;
     submissionsList.innerHTML = "";
     if (data.length === 0) {
@@ -1793,8 +1787,7 @@ async function loadAttendance(lessonId) {
       row.append(name, select, comment);
       attendanceStudentsList.appendChild(row);
     });
-    attendanceEditorSection.hidden = false;
-    attendanceEditorSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.TeacherUI?.openCourseDetail("attendanceEditorSection");
   } catch (error) {
     console.error("Ошибка загрузки посещаемости:", error);
     message.textContent = "Не удалось загрузить посещаемость.";
@@ -1845,7 +1838,7 @@ async function loadGradeItems(lessonId, lessonTitle = "") {
     selectedLessonTitle = lessonTitle;
 
     attendanceEditorSection.hidden = true;
-    gradeItemsSection.hidden = false;
+    window.TeacherUI?.openCourseDetail("gradeItemsSection");
     gradeItemsTitle.textContent = `Оценивания: ${lessonTitle}`;
     gradeItemsList.innerHTML = "";
 
@@ -2398,7 +2391,7 @@ async function openSubmission(submission) {
     submission.first_name,
     submission.middle_name
   ].filter(Boolean).join(" ");
-  submissionDetailsSection.hidden = false;
+  window.TeacherUI?.openCourseDetail("submissionDetailsSection");
   submissionDetailsTitle.textContent = `Работа студента: ${fullName}`;
   submissionStudent.textContent = `Студент: ${fullName}`;
   submissionStatus.textContent = `Статус: ${getSubmissionStatusLabel(submission.status)}`;

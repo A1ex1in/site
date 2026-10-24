@@ -71,9 +71,13 @@
 
   const mainCoursePanelIds = ["courseLessonsSection","courseMaterialsSection","courseAssignmentsSection","journalSection"];
   const detailPanelIds = ["attendanceEditorSection","gradeItemsSection","materialFilesSection","assignmentFilesSection","submissionsSection","submissionDetailsSection"];
-  [...mainCoursePanelIds,...detailPanelIds].forEach((id) => {
+  mainCoursePanelIds.forEach((id) => {
     const panel = byId(id);
     if (panel) workspace.appendChild(panel);
+  });
+  detailPanelIds.forEach((id) => {
+    const panel = byId(id);
+    if (panel) document.body.appendChild(panel);
   });
 
   function collapseCourseForm(sectionId,formId,listId,title,subtitle,listTitle = "") {
@@ -104,28 +108,125 @@
   studentsView.id = "teacherStudentsView";
   studentsView.hidden = true;
   studentsView.appendChild(sectionHeading("Учащиеся","Студенты и группы","Подтвердите новые заявки, затем откройте группу и карточку студента."));
-  const studentsGrid = element("div","teacher-student-grid");
-  const pendingSurface = element("section","teacher-surface");
-  pendingSurface.appendChild(blockHeading("Новые","Заявки на регистрацию"));
-  pendingSurface.appendChild(byId("studentsList"));
-  studentsGrid.appendChild(pendingSurface);
-  studentsGrid.appendChild(createPanel("Добавить группу","Создание новой учебной группы",[byId("groupForm")]));
-  studentsView.appendChild(studentsGrid);
+
+  const studentTabs = element("nav","teacher-student-tabs");
+  studentTabs.setAttribute("aria-label","Разделы студентов");
+  studentTabs.innerHTML = '<button type="button" class="is-active" data-student-panel="teacherGroupsPanel">Группы</button><button type="button" data-student-panel="teacherRequestsPanel">Заявки на регистрацию</button>';
+  studentsView.appendChild(studentTabs);
+
+  const groupsPanel = element("div","teacher-students-panel");
+  groupsPanel.id = "teacherGroupsPanel";
+  groupsPanel.appendChild(createPanel("Добавить группу","Создание новой учебной группы",[byId("groupForm")]));
   const groupsSurface = element("section","teacher-surface");
   groupsSurface.appendChild(blockHeading("Список","Учебные группы","Откройте группу, чтобы увидеть её студентов."));
   groupsSurface.appendChild(byId("groupsList"));
-  studentsView.appendChild(groupsSurface);
+  groupsPanel.appendChild(groupsSurface);
+
+  const requestsPanel = element("div","teacher-students-panel");
+  requestsPanel.id = "teacherRequestsPanel";
+  requestsPanel.hidden = true;
+  const pendingSurface = element("section","teacher-surface");
+  pendingSurface.appendChild(blockHeading("Новые","Заявки на регистрацию"));
+  pendingSurface.appendChild(byId("studentsList"));
+  requestsPanel.appendChild(pendingSurface);
+  studentsView.append(groupsPanel,requestsPanel);
+
   ["groupStudentsSection","studentDetailsSection"].forEach((id) => {
     const panel = byId(id);
     if (panel) {
-      panel.classList.add("teacher-surface");
+      panel.classList.add("teacher-surface","teacher-drilldown");
       studentsView.appendChild(panel);
     }
   });
 
+  const groupTitle = byId("selectedGroupName");
+  const groupHeader = element("header","teacher-drilldown-header");
+  const groupBackButton = document.createElement("button");
+  groupBackButton.type = "button";
+  groupBackButton.textContent = "← К группам";
+  groupHeader.append(groupBackButton,groupTitle);
+  byId("groupStudentsSection").prepend(groupHeader);
+
+  const studentSection = byId("studentDetailsSection");
+  const studentTitle = studentSection.querySelector(":scope > h3");
+  studentSection.querySelector(":scope > h4")?.classList.add("teacher-subheading");
+  const studentHeader = element("header","teacher-drilldown-header");
+  const studentBackButton = document.createElement("button");
+  studentBackButton.type = "button";
+  studentBackButton.textContent = "← К студентам группы";
+  studentHeader.append(studentBackButton,studentTitle);
+  studentSection.prepend(studentHeader);
+
   content.append(homeView,coursesView,studentsView);
 
   let activeCourse = null;
+
+  const drawerBackdrop = element("div","teacher-drawer-backdrop");
+  drawerBackdrop.hidden = true;
+  document.body.appendChild(drawerBackdrop);
+  detailPanelIds.forEach((id) => {
+    const panel = byId(id);
+    if (!panel) return;
+    panel.classList.add("teacher-course-drawer");
+    panel.setAttribute("role","dialog");
+    panel.setAttribute("aria-modal","true");
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "teacher-drawer-close";
+    closeButton.textContent = id === "submissionDetailsSection" ? "← К работам студентов" : "Закрыть ×";
+    closeButton.addEventListener("click",() => {
+      if (id === "submissionDetailsSection") openCourseDetail("submissionsSection");
+      else closeCourseDetail();
+    });
+    panel.prepend(closeButton);
+  });
+
+  function showStudentPanel(panelId) {
+    [groupsPanel,requestsPanel].forEach((panel) => { panel.hidden = panel.id !== panelId; });
+    byId("groupStudentsSection").hidden = true;
+    byId("studentDetailsSection").hidden = true;
+    studentTabs.querySelectorAll("button").forEach((button) => {
+      button.classList.toggle("is-active",button.dataset.studentPanel === panelId);
+    });
+  }
+
+  function openGroupDetails() {
+    groupsPanel.hidden = true;
+    requestsPanel.hidden = true;
+    byId("studentDetailsSection").hidden = true;
+    byId("groupStudentsSection").hidden = false;
+    byId("groupStudentsSection").scrollIntoView({ behavior:"smooth",block:"start" });
+  }
+
+  function openStudentDetails() {
+    groupsPanel.hidden = true;
+    requestsPanel.hidden = true;
+    byId("groupStudentsSection").hidden = true;
+    byId("studentDetailsSection").hidden = false;
+    byId("studentDetailsSection").scrollIntoView({ behavior:"smooth",block:"start" });
+  }
+
+  function closeCourseDetail() {
+    detailPanelIds.forEach((id) => {
+      const panel = byId(id);
+      if (panel) panel.hidden = true;
+    });
+    drawerBackdrop.hidden = true;
+    document.body.classList.remove("teacher-drawer-open");
+  }
+
+  function openCourseDetail(panelId) {
+    detailPanelIds.forEach((id) => {
+      const panel = byId(id);
+      if (panel) panel.hidden = id !== panelId;
+    });
+    const panel = byId(panelId);
+    if (!panel) return;
+    drawerBackdrop.hidden = false;
+    document.body.classList.add("teacher-drawer-open");
+    panel.scrollTop = 0;
+    panel.querySelector(".teacher-drawer-close")?.focus();
+  }
 
   function activateView(target) {
     const view = typeof target === "string" ? document.querySelector(target) : target;
@@ -144,10 +245,7 @@
       const panel = byId(id);
       if (panel) panel.hidden = id !== panelId;
     });
-    detailPanelIds.forEach((id) => {
-      const panel = byId(id);
-      if (panel) panel.hidden = true;
-    });
+    closeCourseDetail();
     tabs.querySelectorAll("button").forEach((button) => {
       button.classList.toggle("is-active",button.dataset.coursePanel === panelId);
     });
@@ -182,5 +280,23 @@
     button.addEventListener("click",() => activateView(button.dataset.openTeacherView));
   });
 
-  window.TeacherUI = { activateView,openCourse,setCoursePanel,getActiveCourse:() => activeCourse };
+  studentTabs.querySelectorAll("button").forEach((button) => {
+    button.addEventListener("click",() => showStudentPanel(button.dataset.studentPanel));
+  });
+  groupBackButton.addEventListener("click",() => showStudentPanel("teacherGroupsPanel"));
+  studentBackButton.addEventListener("click",openGroupDetails);
+  drawerBackdrop.addEventListener("click",closeCourseDetail);
+  document.addEventListener("keydown",(event) => {
+    if (event.key === "Escape" && !drawerBackdrop.hidden) closeCourseDetail();
+  });
+
+  window.TeacherUI = {
+    activateView,
+    openCourse,
+    setCoursePanel,
+    openCourseDetail,
+    closeCourseDetail,
+    openGroupDetails,
+    openStudentDetails
+  };
 })();
