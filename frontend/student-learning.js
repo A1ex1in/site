@@ -69,7 +69,11 @@ function setProgress(value) {
 }
 
 function scrollTop() {
-  window.scrollTo({ top:0, behavior:"smooth" });
+  window.scrollTo({ top:0, behavior:"auto" });
+}
+
+function pushView(view, details = {}) {
+  window.history.pushState({ eduView:view, ...details },"",window.location.pathname);
 }
 
 function courseTitle() {
@@ -89,7 +93,14 @@ function itemStatus(item) {
   if (item.submission_status === "graded") return { text:"Проверено", className:"is-done" };
   if (item.submission_status === "submitted") return { text:"На проверке", className:"is-waiting" };
   if (item.submission_status === "returned") return { text:"На доработке", className:"is-warning" };
+  if (item.submission_status === "draft") return { text:"В работе", className:"is-progress" };
   return { text:"Задание", className:"is-assignment" };
+}
+
+function updateAssignmentStatus(assignmentId, status) {
+  state.path?.modules?.forEach((module) => module.lessons.forEach((lesson) => lesson.items.forEach((item) => {
+    if (item.kind === "assignment" && String(item.id) === String(assignmentId)) item.submission_status = status;
+  })));
 }
 
 function bindBack(buttonId, handler) {
@@ -97,6 +108,7 @@ function bindBack(buttonId, handler) {
 }
 
 function renderDashboard() {
+  scrollTop();
   setProgress(null);
   const firstName = state.profile?.firstName || "студент";
   const fullName = [state.profile?.lastName,state.profile?.firstName,state.profile?.middleName].filter(Boolean).join(" ");
@@ -141,6 +153,7 @@ async function openCourse(courseId) {
   try {
     state.path = await request(`/api/student/courses/${courseId}/learning-path`);
     state.moduleIndex = 0;
+    pushView("course",{ courseId });
     renderCourse();
   } catch (error) {
     showMessage(error.message);
@@ -149,6 +162,7 @@ async function openCourse(courseId) {
 }
 
 function renderCourse() {
+  scrollTop();
   setProgress(0);
   const course = state.path.course;
   const teacher = [course.teacher_last_name,course.teacher_first_name,course.teacher_middle_name].filter(Boolean).join(" ");
@@ -168,7 +182,7 @@ function renderCourse() {
       <div class="section-title-row"><div><p class="student-eyebrow">Содержание</p><h2>Модули курса</h2></div></div>
       <div class="module-grid" id="moduleGrid"></div>
     </section>`;
-  bindBack("courseHomeButton",renderDashboard);
+  bindBack("courseHomeButton",() => window.history.back());
   const grid = document.getElementById("moduleGrid");
   if (state.path.modules.length === 0) {
     grid.innerHTML = '<div class="learning-empty"><strong>Курс пока наполняется</strong><p>Преподаватель ещё не добавил модули.</p></div>';
@@ -184,6 +198,7 @@ function renderCourse() {
     card.innerHTML = `<span class="module-number">${String(index + 1).padStart(2,"0")}</span><span class="module-card-content"><small>${module.lessons.length} ${module.lessons.length === 1 ? "занятие" : "занятий"}</small><strong>${escapeHtml(module.title)}</strong><p>${escapeHtml(module.description || "Материалы и задания учебного модуля")}</p><span class="module-meter"><i style="width:${percent}%"></i></span><em>${items.length} элементов · ${percent}% выполнено</em></span><b>→</b>`;
     card.addEventListener("click",() => {
       state.moduleIndex = index;
+      pushView("module",{ moduleIndex:index });
       renderModule();
     });
     grid.appendChild(card);
@@ -194,6 +209,7 @@ function renderModule() {
   const module = currentModule();
   if (!module) return renderCourse();
   setProgress(10);
+  scrollTop();
   app.className = "learning-app learning-app--module";
   app.innerHTML = `
     <section class="module-hero">
@@ -202,15 +218,15 @@ function renderModule() {
         <p class="course-kicker">${escapeHtml(courseTitle())}</p>
         <h1>${escapeHtml(module.title)}</h1>
         <p>${escapeHtml(module.description || "Материалы и задания модуля")}</p>
-        <nav class="module-tabs"><span class="is-active">Основной курс</span><span>Календарь</span><span>Практика</span><span>Заметки</span></nav>
       </div>
     </section>
     <section class="learning-container module-content">
-      <div class="module-help"><strong>Что нужно сделать, чтобы завершить модуль</strong><span>⌄</span></div>
+      <button class="module-content-back" id="moduleContentBackButton" type="button">← Вернуться к модулям курса</button>
       <h2>${escapeHtml(module.title)}</h2>
       <div class="lesson-accordion" id="lessonAccordion"></div>
     </section>`;
-  bindBack("moduleBackButton",renderCourse);
+  bindBack("moduleBackButton",() => window.history.back());
+  bindBack("moduleContentBackButton",() => window.history.back());
   const accordion = document.getElementById("lessonAccordion");
   if (module.lessons.length === 0) {
     accordion.innerHTML = '<div class="learning-empty"><strong>В модуле пока нет занятий</strong></div>';
@@ -245,6 +261,7 @@ function renderModule() {
         row.innerHTML = `<span class="lesson-item-icon">${item.kind === "assignment" ? "✎" : "▷"}</span><span><strong>${escapeHtml(item.title)}</strong><small>${item.kind === "assignment" ? `до ${escapeHtml(formatDate(item.deadline,true))}` : escapeHtml(typeLabels[item.material_type] || "Учебный материал")}</small></span><em class="${status.className}">${status.text}</em><b>→</b>`;
         row.addEventListener("click",() => {
           state.itemIndex = globalIndex;
+          pushView("item",{ moduleIndex:state.moduleIndex, itemIndex:globalIndex });
           openCurrentItem();
         });
         itemsContainer.appendChild(row);
@@ -264,16 +281,21 @@ function itemNavigation(item) {
 }
 
 function bindItemNavigation() {
-  bindBack("itemModuleButton",renderModule);
+  bindBack("itemModuleButton",() => {
+    pushView("module",{ moduleIndex:state.moduleIndex });
+    renderModule();
+  });
   document.getElementById("previousItemButton")?.addEventListener("click",() => {
     if (state.itemIndex > 0) {
       state.itemIndex -= 1;
+      pushView("item",{ moduleIndex:state.moduleIndex, itemIndex:state.itemIndex });
       openCurrentItem();
     }
   });
   document.getElementById("nextItemButton")?.addEventListener("click",() => {
     if (state.itemIndex < moduleItems().length - 1) {
       state.itemIndex += 1;
+      pushView("item",{ moduleIndex:state.moduleIndex, itemIndex:state.itemIndex });
       openCurrentItem();
     }
   });
@@ -282,7 +304,8 @@ function bindItemNavigation() {
 function openCurrentItem() {
   const item = moduleItems()[state.itemIndex];
   if (!item) return renderModule();
-  if (item.kind === "assignment") renderAssignmentIntro(item);
+  if (item.kind === "assignment" && item.submission_status) renderAssignment(item);
+  else if (item.kind === "assignment") renderAssignmentIntro(item);
   else renderMaterial(item);
   scrollTop();
 }
@@ -311,7 +334,33 @@ function renderAssignmentIntro(item) {
   app.className = "learning-app learning-app--item";
   app.innerHTML = `<section class="item-shell"><div class="learning-container">${itemNavigation(item)}<article class="assignment-intro"><div class="assignment-illustration"><span>✓</span><i></i><i></i><i></i></div><div><p class="student-eyebrow">Практическое задание</p><h2>Время для практики!</h2><p>${escapeHtml(item.description || "Ознакомьтесь с заданием, подготовьте решение и отправьте его преподавателю.")}</p><dl><div><dt>Максимальный балл</dt><dd>${escapeHtml(item.max_score)}</dd></div><div><dt>Срок выполнения</dt><dd>${escapeHtml(formatDate(item.deadline,true))}</dd></div></dl><button class="learning-primary" id="startAssignmentButton" type="button">Приступить к заданию</button></div></article></div></section>`;
   bindItemNavigation();
-  document.getElementById("startAssignmentButton").addEventListener("click",() => renderAssignment(item));
+  document.getElementById("startAssignmentButton").addEventListener("click",async () => {
+    const button = document.getElementById("startAssignmentButton");
+    button.disabled = true;
+    try {
+      const current = await request(`/api/student/assignments/${item.id}/submission`);
+      if (!current.submission) {
+        const data = await request(`/api/student/assignments/${item.id}/submission`,{
+          method:"PUT",
+          headers:{ "Content-Type":"application/json" },
+          body:JSON.stringify({ studentComment:"" })
+        });
+        updateAssignmentStatus(item.id,data.submission.status);
+        showMessage("Вы приступили к заданию — создан черновик работы");
+      } else {
+        updateAssignmentStatus(item.id,current.submission.status);
+      }
+      window.history.replaceState({
+        eduView:"assignment",
+        moduleIndex:state.moduleIndex,
+        itemIndex:state.itemIndex
+      },"",window.location.pathname);
+      renderAssignment({ ...item, submission_status:current.submission?.status || "draft" });
+    } catch (error) {
+      showMessage(error.message);
+      button.disabled = false;
+    }
+  });
 }
 
 async function renderAssignment(item) {
@@ -338,7 +387,7 @@ function renderAssignmentDownloads(item,files) {
 }
 
 function submissionLabel(status) {
-  return ({ draft:"Черновик",submitted:"На проверке",returned:"Возвращено на доработку",graded:"Проверено" })[status] || "Не начато";
+  return ({ draft:"В работе",submitted:"На проверке",returned:"Возвращено на доработку",graded:"Проверено" })[status] || "Не начато";
 }
 
 function renderSubmissionEditor(item,submission,files) {
@@ -430,12 +479,13 @@ async function refreshSubmission(item) {
 }
 
 function renderProfile() {
+  scrollTop();
   setProgress(null);
   const student = state.profile;
   const fullName = [student.lastName,student.firstName,student.middleName].filter(Boolean).join(" ");
   app.className = "learning-app";
   app.innerHTML = `<section class="learning-container profile-page"><button class="crumb-button" id="profileBackButton" type="button">← Моё обучение</button><div class="profile-card"><span class="profile-avatar">${escapeHtml((student.firstName?.[0] || "С") + (student.lastName?.[0] || ""))}</span><div><p class="student-eyebrow">Профиль студента</p><h1>${escapeHtml(fullName)}</h1><dl><div><dt>E-mail</dt><dd>${escapeHtml(student.email)}</dd></div><div><dt>Учебная группа</dt><dd>${escapeHtml(student.group?.name || "Не назначена")}</dd></div><div><dt>Номер студента</dt><dd>${escapeHtml(student.studentNumber || "Не указан")}</dd></div></dl></div></div></section>`;
-  bindBack("profileBackButton",renderDashboard);
+  bindBack("profileBackButton",() => window.history.back());
 }
 
 async function logout() {
@@ -447,10 +497,20 @@ async function logout() {
   window.location.href = "login.html";
 }
 
-document.getElementById("homeLink").addEventListener("click",(event) => { event.preventDefault(); renderDashboard(); });
-document.getElementById("coursesNavButton").addEventListener("click",renderDashboard);
-document.getElementById("profileNavButton").addEventListener("click",renderProfile);
-document.getElementById("avatarButton").addEventListener("click",renderProfile);
+function goToDashboard() {
+  pushView("dashboard");
+  renderDashboard();
+}
+
+function goToProfile() {
+  pushView("profile");
+  renderProfile();
+}
+
+document.getElementById("homeLink").addEventListener("click",(event) => { event.preventDefault(); goToDashboard(); });
+document.getElementById("coursesNavButton").addEventListener("click",goToDashboard);
+document.getElementById("profileNavButton").addEventListener("click",goToProfile);
+document.getElementById("avatarButton").addEventListener("click",goToProfile);
 document.getElementById("logoutButton").addEventListener("click",logout);
 message.addEventListener("click",() => { message.textContent = ""; });
 
@@ -464,10 +524,42 @@ async function init() {
     state.courses = courses;
     const initials = `${state.profile.firstName?.[0] || "С"}${state.profile.lastName?.[0] || ""}`.toUpperCase();
     document.getElementById("avatarButton").textContent = initials;
+    window.history.replaceState({ eduView:"dashboard", base:true },"",window.location.pathname);
+    window.history.pushState({ eduView:"dashboard", guard:true },"",window.location.pathname);
     renderDashboard();
   } catch (error) {
     app.innerHTML = `<div class="learning-empty"><strong>Не удалось открыть кабинет</strong><p>${escapeHtml(error.message)}</p></div>`;
   }
 }
+
+window.addEventListener("popstate",(event) => {
+  const view = event.state?.eduView || "dashboard";
+  if (view === "course" && state.path) {
+    renderCourse();
+    return;
+  }
+  if (view === "module" && state.path) {
+    state.moduleIndex = Number(event.state.moduleIndex) || 0;
+    renderModule();
+    return;
+  }
+  if ((view === "item" || view === "assignment") && state.path) {
+    state.moduleIndex = Number(event.state.moduleIndex) || 0;
+    state.itemIndex = Number(event.state.itemIndex) || 0;
+    const item = moduleItems()[state.itemIndex];
+    if (!item) return renderModule();
+    if (view === "assignment") renderAssignment(item);
+    else openCurrentItem();
+    return;
+  }
+  if (view === "profile") {
+    renderProfile();
+    return;
+  }
+  renderDashboard();
+  if (event.state?.base) {
+    window.history.pushState({ eduView:"dashboard", guard:true },"",window.location.pathname);
+  }
+});
 
 init();

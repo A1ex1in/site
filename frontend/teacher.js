@@ -2477,7 +2477,7 @@ function formatFileSize(sizeBytes) {
 
 function getSubmissionStatusLabel(status) {
   const labels = {
-    draft: "Черновик",
+    draft: "В работе",
     submitted: "Отправлено",
     returned: "Возвращено на доработку",
     graded: "Проверено"
@@ -2488,7 +2488,7 @@ function getSubmissionStatusLabel(status) {
 function getJournalCellText(submission, assignment) {
   if (!submission) return "—";
   if (submission.status === "draft") {
-    return "Черновик";
+    return "В работе";
   }
   if (submission.status === "submitted") {
     return submission.is_late ? "На проверке (с опозданием)" : "На проверке";
